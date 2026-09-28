@@ -19,6 +19,10 @@ function IconoCompartir({ className = "h-4 w-4" }: { className?: string }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.7 10.6 6.6-4.2M8.7 13.4l6.6 4.2" /></svg>;
 }
 
+function IconoFiltro({ className = "h-4 w-4" }: { className?: string }) {
+  return <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M7 12h10m-7 5h4" /><circle cx="8" cy="7" r="2" fill="#11100f" /><circle cx="15" cy="12" r="2" fill="#11100f" /><circle cx="12" cy="17" r="2" fill="#11100f" /></svg>;
+}
+
 function IconoRed({ nombre, className = "h-5 w-5" }: { nombre: string; className?: string }) {
   const red = nombre.toLowerCase();
   if (red.includes("instagram")) return <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="18" cy="6" r="1" fill="currentColor" stroke="none" /></svg>;
@@ -58,6 +62,9 @@ export default function Home() {
   const [cargando, setCargando] = useState(true);
   const [obraSeleccionada, setObraSeleccionada] = useState<Obra | null>(null);
   const [categoria, setCategoria] = useState("Todas");
+  const [disponibilidad, setDisponibilidad] = useState("Todas");
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+  const filtrosRef = useRef<HTMLDivElement | null>(null);
   const [aviso, setAviso] = useState("");
   const [perfil, setPerfil] = useState<PerfilArtista>({ nombre: "Yasiel Pérez Díaz", biografia: "Pintor, grabador, ilustrador y escultor. Un lenguaje visual que transita entre la materia, la memoria y la emoción.", redes: [] });
   const [fotoArtistaUrl, setFotoArtistaUrl] = useState("");
@@ -108,7 +115,27 @@ export default function Home() {
     }
   }, [obras]);
 
-  const obrasFiltradas = useMemo(() => categoria === "Todas" ? obras : obras.filter((obra) => obra.categoria === categoria), [categoria, obras]);
+  useEffect(() => {
+    if (!filtrosAbiertos) return;
+    function cerrarAlSalir(event: PointerEvent) {
+      if (filtrosRef.current && !filtrosRef.current.contains(event.target as Node)) setFiltrosAbiertos(false);
+    }
+    function cerrarConEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setFiltrosAbiertos(false);
+    }
+    document.addEventListener("pointerdown", cerrarAlSalir);
+    document.addEventListener("keydown", cerrarConEscape);
+    return () => {
+      document.removeEventListener("pointerdown", cerrarAlSalir);
+      document.removeEventListener("keydown", cerrarConEscape);
+    };
+  }, [filtrosAbiertos]);
+
+  const obrasFiltradas = useMemo(() => obras.filter((obra) => {
+    const coincideCategoria = categoria === "Todas" || obra.categoria === categoria;
+    const coincideDisponibilidad = disponibilidad === "Todas" || (disponibilidad === "Disponibles" ? obra.disponible : !obra.disponible);
+    return coincideCategoria && coincideDisponibilidad;
+  }), [categoria, disponibilidad, obras]);
 
   async function compartir(obra: Obra) {
     const url = `${window.location.origin}/#obra=${obra.id}`;
@@ -154,28 +181,36 @@ export default function Home() {
           <h1 className="display-title mt-5 text-7xl font-light tracking-[-0.07em] sm:text-8xl md:text-[11rem]">YASS<span className="text-[#bf775f]">.</span></h1>
           <div className="my-8 h-px w-20 bg-[#bf775f] sm:my-10 sm:w-28" />
           <p className="max-w-xl font-serif text-xl leading-relaxed text-[#c8c0b5] sm:text-2xl">Pintura, grabado, ilustración y escultura.<br />Obras para mirar con tiempo.</p>
-          <div className="mt-10 flex flex-wrap gap-3"><a href="#galeria" className="inline-flex min-h-14 items-center border border-[#82796e] px-7 text-xs tracking-[0.2em] transition hover:border-[#bf775f] hover:bg-[#bf775f] hover:text-[#11100f]">EXPLORAR LA COLECCIÓN <span className="ml-5">↓</span></a><button onClick={compartirPagina} className="inline-flex min-h-14 items-center gap-3 border border-[#82796e] px-6 text-xs tracking-[0.15em] transition hover:border-[#bf775f]"><IconoCompartir /> COMPARTIR PÁGINA</button></div>
+          <div className="mt-10 flex flex-wrap gap-3"><a href="#galeria" className="inline-flex min-h-14 items-center rounded-full border border-[#82796e] px-7 text-xs tracking-[0.2em] transition-all duration-300 hover:border-[#bf775f] hover:bg-[#bf775f] hover:text-[#11100f]">EXPLORAR LA COLECCIÓN <span className="ml-5">↓</span></a><button onClick={compartirPagina} className="inline-flex min-h-14 items-center gap-3 rounded-full border border-[#82796e] px-6 text-xs tracking-[0.15em] transition-all duration-300 hover:border-[#bf775f] hover:bg-white/[0.03]"><IconoCompartir /> COMPARTIR PÁGINA</button></div>
         </div>
         <span className="absolute bottom-9 right-8 hidden text-[10px] tracking-[0.28em] text-[#8e857a] md:block">OBRA ORIGINAL · HECHA A MANO</span>
       </section>
 
       <section id="galeria" className="scroll-mt-4 px-5 py-20 sm:px-8 sm:py-28 md:px-16">
         <div className="mx-auto max-w-7xl">
-          <div className="mb-9 flex flex-col justify-between gap-5 sm:mb-12 sm:flex-row sm:items-end">
-            <div><p className="eyebrow">COLECCIÓN</p><h2 className="display-title mt-3 text-5xl font-light sm:text-6xl">Obras seleccionadas</h2></div>
-            <p className="max-w-xs text-sm leading-relaxed text-[#938a7f]">Cada pieza guarda una historia. Encuentra la tuya.</p>
+          <div className="mb-10" ref={filtrosRef}>
+            <div className="relative inline-block">
+              <button type="button" onClick={() => setFiltrosAbiertos((abierto) => !abierto)} aria-expanded={filtrosAbiertos} aria-controls="menu-filtros-obras" className="inline-flex min-h-12 items-center gap-3 rounded-full border border-[#5a5046] bg-[#191714] px-5 text-sm text-[#e8dfd4] shadow-sm transition-all duration-300 hover:border-[#bf775f] hover:bg-[#211e1a]">
+                <IconoFiltro /> <span>Filtrar obras</span>
+                {(categoria !== "Todas" || disponibilidad !== "Todas") && <span className="grid h-6 min-w-6 place-items-center rounded-full bg-[#bf775f] px-1.5 text-[11px] font-medium text-[#11100f]">{Number(categoria !== "Todas") + Number(disponibilidad !== "Todas")}</span>}
+                <span aria-hidden="true" className={`ml-1 text-xs transition-transform duration-300 ${filtrosAbiertos ? "rotate-180" : ""}`}>⌄</span>
+              </button>
+              {filtrosAbiertos && <div id="menu-filtros-obras" className="filter-menu absolute left-0 top-[calc(100%+0.65rem)] z-30 w-[min(21rem,calc(100vw-2.5rem))] rounded-2xl border border-[#484139] bg-[#191714] p-5 shadow-2xl shadow-black/40 animate-reveal">
+                <div className="mb-5 flex items-center justify-between"><p className="font-serif text-lg">Filtrar colección</p><button type="button" onClick={() => { setCategoria("Todas"); setDisponibilidad("Todas"); }} className="rounded-full px-3 py-2 text-xs text-[#bfaa96] transition-colors hover:bg-white/[0.06] hover:text-white">Limpiar</button></div>
+                <fieldset><legend className="mb-2 text-[10px] uppercase tracking-[0.17em] text-[#938a7f]">Categoría</legend><div className="grid grid-cols-2 gap-2">{categorias.map((item) => <button type="button" key={item} aria-pressed={categoria === item} onClick={() => setCategoria(item)} className={`min-h-10 rounded-xl border px-3 text-left text-xs transition-all duration-200 ${categoria === item ? "border-[#bf775f]/70 bg-[#bf775f]/15 text-[#e4b19a]" : "border-transparent text-[#c8c0b5] hover:border-[#484139] hover:bg-white/[0.035]"}`}>{item}</button>)}</div></fieldset>
+                <fieldset className="mt-5 border-t border-white/[0.07] pt-4"><legend className="mb-2 text-[10px] uppercase tracking-[0.17em] text-[#938a7f]">Disponibilidad</legend><div className="space-y-1">{[["Todas", "Todas las obras"], ["Disponibles", "Disponibles para comprar"], ["Vendidas", "Vendidas"]].map(([valor, etiqueta]) => <button type="button" key={valor} aria-pressed={disponibilidad === valor} onClick={() => setDisponibilidad(valor)} className={`flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-xs transition-all duration-200 ${disponibilidad === valor ? "bg-[#bf775f]/15 text-[#e4b19a]" : "text-[#c8c0b5] hover:bg-white/[0.035]"}`}><span className={`grid h-4 w-4 place-items-center rounded-full border ${disponibilidad === valor ? "border-[#bf8871]" : "border-[#63594e]"}`}>{disponibilidad === valor && <span className="h-2 w-2 rounded-full bg-[#bf8871]" />}</span>{etiqueta}</button>)}</div></fieldset>
+              </div>}
+            </div>
+            {(categoria !== "Todas" || disponibilidad !== "Todas") && <span className="ml-3 text-xs text-[#938a7f]">{obrasFiltradas.length} {obrasFiltradas.length === 1 ? "obra" : "obras"}</span>}
           </div>
-          <div className="hide-scrollbar mb-9 flex gap-2 overflow-x-auto pb-2" aria-label="Filtrar por categoría">
-            {categorias.map((item) => <button key={item} onClick={() => setCategoria(item)} className={`min-h-11 shrink-0 rounded-full border px-5 text-xs tracking-wide transition ${categoria === item ? "border-[#bf775f] bg-[#bf775f] text-[#11100f]" : "border-[#3b3732] text-[#c8c0b5] hover:border-[#9d6d5b]"}`}>{item}</button>)}
-          </div>
-          {cargando ? <p className="text-[#938a7f]">Cargando obras...</p> : obrasFiltradas.length === 0 ? <p className="py-12 text-[#938a7f]">{obras.length ? "No hay obras en esta categoría." : "Próximamente, nuevas obras."}</p> :
+          {cargando ? <p className="text-[#938a7f]">Cargando obras...</p> : obrasFiltradas.length === 0 ? <p className="py-12 text-[#938a7f]">{obras.length ? "No hay obras con estos filtros." : "Próximamente, nuevas obras."}</p> :
             <div className="grid grid-cols-1 gap-x-7 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-              {obrasFiltradas.map((obra, indice) => <article key={obra.id} className="art-card group animate-reveal" style={{ animationDelay: `${Math.min(indice, 8) * 70}ms` }}>
+              {obrasFiltradas.map((obra, indice) => <article key={obra.id} className="art-card group animate-reveal rounded-2xl border border-white/[0.045] bg-white/[0.015] p-2.5 pb-4 transition-all duration-500 hover:border-[#bf775f]/25 hover:bg-white/[0.035]" style={{ animationDelay: `${Math.min(indice, 8) * 70}ms` }}>
                 <button onClick={() => setObraSeleccionada(obra)} className="block w-full text-left" aria-label={`Ver ${obra.titulo}`}>
-                  <div className="relative aspect-[4/5] overflow-hidden bg-[#211e1a]">
+                  <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-[#211e1a]">
                     {obra.imagenUrl && <img src={obra.imagenUrl} alt={obra.titulo} loading="lazy" className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.035]" />}
-                    <span className="absolute left-4 top-4 bg-[#11100f]/75 px-3 py-2 text-[10px] uppercase tracking-[0.16em] backdrop-blur">{obra.categoria}</span>
-                    <span className={`absolute right-4 top-4 px-3 py-2 text-[10px] uppercase tracking-[0.12em] ${obra.disponible ? "bg-[#e9e1d5] text-[#28231e]" : "bg-[#37332f] text-[#d2c8bb]"}`}>{obra.disponible ? "Disponible" : "Vendida"}</span>
+                    <span className="absolute left-4 top-4 rounded-full bg-[#11100f]/75 px-3 py-2 text-[10px] uppercase tracking-[0.16em] backdrop-blur">{obra.categoria}</span>
+                    <span className={`absolute right-4 top-4 rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.12em] ${obra.disponible ? "bg-[#e9e1d5] text-[#28231e]" : "bg-[#37332f] text-[#d2c8bb]"}`}>{obra.disponible ? "Disponible" : "Vendida"}</span>
                   </div>
                   <div className="flex items-start justify-between gap-3 pt-4">
                     <div><h3 className="font-serif text-xl sm:text-2xl">{obra.titulo}</h3><p className="mt-1.5 text-sm text-[#938a7f]">{obra.tecnica}{obra.anio ? ` · ${obra.anio}` : ""}</p></div>
@@ -183,8 +218,8 @@ export default function Home() {
                   </div>
                 </button>
                 <div className="mt-4 flex gap-3">
-                  <a href={enlaceWhatsApp(obra)} target="_blank" rel="noreferrer" className="flex min-h-11 flex-1 items-center justify-center bg-[#d6c6ae] px-3 text-center text-[10px] font-medium tracking-[0.12em] text-[#211e1a] transition hover:bg-[#bf775f]">{obra.disponible ? "COMPRAR / CONSULTAR" : "CONSULTAR OBRA"}</a>
-                  <button onClick={() => compartir(obra)} aria-label={`Compartir ${obra.titulo}`} className="grid min-h-11 min-w-12 place-items-center border border-[#484139] text-[#d6c6ae] transition hover:border-[#bf775f]" title="Compartir"><IconoCompartir /></button>
+                  <a href={enlaceWhatsApp(obra)} target="_blank" rel="noreferrer" className="flex min-h-11 flex-1 items-center justify-center rounded-full bg-[#d6c6ae] px-3 text-center text-[10px] font-medium tracking-[0.12em] text-[#211e1a] transition-all duration-300 hover:bg-[#bf775f]">{obra.disponible ? "COMPRAR / CONSULTAR" : "CONSULTAR OBRA"}</a>
+                  <button onClick={() => compartir(obra)} aria-label={`Compartir ${obra.titulo}`} className="grid min-h-11 min-w-12 place-items-center rounded-full border border-[#484139] text-[#d6c6ae] transition-all duration-300 hover:border-[#bf775f] hover:bg-[#bf775f]/10" title="Compartir"><IconoCompartir /></button>
                 </div>
               </article>)}
             </div>}
@@ -195,12 +230,12 @@ export default function Home() {
         <div className="mx-auto flex max-w-4xl flex-col gap-7 sm:flex-row sm:items-start sm:gap-10">{fotoArtistaUrl && <img src={fotoArtistaUrl} alt={`Retrato de ${perfil.nombre}`} loading="lazy" className="h-36 w-36 shrink-0 rounded-full border border-[#484139] object-cover sm:h-44 sm:w-44" />}<div><p className="eyebrow">EL ARTISTA</p><h2 className="display-title mt-4 text-4xl font-light sm:text-6xl">{perfil.nombre}</h2>{perfil.biografia && <p className="mt-7 max-w-2xl whitespace-pre-line font-serif text-lg leading-relaxed text-[#b9b0a5] sm:text-xl">{perfil.biografia}</p>}<div className="mt-8 flex flex-wrap gap-3">{perfil.redes.filter((red) => red.url?.trim()).map((red, indice) => <a key={`${red.nombre}-${indice}`} href={red.url} target="_blank" rel="noreferrer" aria-label={red.nombre} title={red.nombre} className="grid h-12 w-12 place-items-center border border-[#484139] text-[#d6c6ae] transition hover:border-[#bf775f] hover:bg-[#bf775f]/10 hover:text-white"><IconoRed nombre={red.nombre} /></a>)}</div></div></div>
       </section>
 
-      {obraSeleccionada && <div className="fixed inset-0 z-50 overflow-y-auto bg-[#100f0e]/95 backdrop-blur-sm" onClick={() => setObraSeleccionada(null)}>
+      {obraSeleccionada && <div className="fixed inset-0 z-50 overflow-y-auto bg-[#100f0e]/90 backdrop-blur-md" onClick={() => setObraSeleccionada(null)}>
         <div className="flex min-h-[100svh] items-start justify-center p-4 sm:p-8 md:items-center" onClick={(event) => event.stopPropagation()}>
           <div className="my-auto w-full max-w-6xl animate-reveal">
-            <div className="mb-3 flex justify-end"><button onClick={() => setObraSeleccionada(null)} aria-label="Cerrar" className="flex h-12 w-12 items-center justify-center text-3xl text-[#b9b0a5] hover:text-white">×</button></div>
+            <div className="mb-3 flex justify-end"><button onClick={() => setObraSeleccionada(null)} aria-label="Cerrar" className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 text-3xl text-[#b9b0a5] transition-colors hover:border-white/30 hover:text-white">×</button></div>
             <div className="grid items-center gap-7 md:grid-cols-2 md:gap-12" style={{ touchAction: "pan-y" }} onTouchStart={(event) => { inicioToque.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={(event) => { if (inicioToque.current !== null) { const delta = event.changedTouches[0].clientX - inicioToque.current; if (Math.abs(delta) > 48) cambiarObra(delta < 0 ? 1 : -1); } inicioToque.current = null; }}>
-              <div className="relative bg-[#201d19]"><img src={obraSeleccionada.imagenUrl} alt={obraSeleccionada.titulo} className="max-h-[58vh] w-full object-contain md:max-h-[78vh]" />{obras.length > 1 && <><button onClick={() => cambiarObra(-1)} aria-label="Obra anterior" className="absolute left-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur hover:bg-[#bf775f]">‹</button><button onClick={() => cambiarObra(1)} aria-label="Obra siguiente" className="absolute right-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur hover:bg-[#bf775f]">›</button></>}</div>
+              <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-[#201d19]"><img src={obraSeleccionada.imagenUrl} alt={obraSeleccionada.titulo} className="max-h-[58vh] w-full object-contain md:max-h-[78vh]" />{obras.length > 1 && <><button onClick={() => cambiarObra(-1)} aria-label="Obra anterior" className="absolute left-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">‹</button><button onClick={() => cambiarObra(1)} aria-label="Obra siguiente" className="absolute right-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">›</button></>}</div>
               <div className="pb-8">
                 <p className="eyebrow">{obraSeleccionada.categoria} · {obraSeleccionada.disponible ? "DISPONIBLE" : "VENDIDA"}</p>
                 <h2 className="display-title mt-4 text-4xl font-light leading-tight sm:text-6xl">{obraSeleccionada.titulo}</h2>
