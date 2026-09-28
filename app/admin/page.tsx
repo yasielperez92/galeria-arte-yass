@@ -84,6 +84,7 @@ export default function AdminPage() {
   const [editAudio, setEditAudio] = useState<File | null>(null);
   const [artistaNombre, setArtistaNombre] = useState("Yasiel Pérez Díaz");
   const [artistaBio, setArtistaBio] = useState("");
+  const [artistaWhatsApp, setArtistaWhatsApp] = useState("");
   const [fotoArtistaUrl, setFotoArtistaUrl] = useState("");
   const [fotoArtista, setFotoArtista] = useState<File | null>(null);
   const [vistaPreviaFoto, setVistaPreviaFoto] = useState("");
@@ -114,6 +115,7 @@ export default function AdminPage() {
           const datos = perfil.data();
           setArtistaNombre(datos.nombre || "Yasiel Pérez Díaz");
           setArtistaBio(datos.biografia || "");
+          setArtistaWhatsApp(datos.whatsapp || "");
           setFotoArtistaUrl(datos.fotoUrl || "");
           const redesGuardadas = datos.redes;
           setRedes(Array.isArray(redesGuardadas)
@@ -129,7 +131,7 @@ export default function AdminPage() {
     setGuardandoPerfil(true);
     try {
       const fotoUrl = fotoArtista ? await subirArchivo(fotoArtista, "image") : fotoArtistaUrl;
-      await setDoc(artistDoc, { nombre: artistaNombre, biografia: artistaBio, fotoUrl, redes: redes.filter((red) => red.nombre.trim() && red.url.trim()) }, { merge: true });
+      await setDoc(artistDoc, { nombre: artistaNombre, biografia: artistaBio, whatsapp: artistaWhatsApp, fotoUrl, redes: redes.filter((red) => red.nombre.trim() && red.url.trim()) }, { merge: true });
       setFotoArtistaUrl(fotoUrl);
       setFotoArtista(null);
       setMensaje("Ficha del artista actualizada correctamente.");
@@ -511,6 +513,7 @@ export default function AdminPage() {
           <h2 className="mb-7 mt-3 text-2xl font-light">Ficha del artista</h2>
           <div className="space-y-5">
             <div><label className="mb-2 block text-sm text-gray-400">Nombre del artista</label><input value={artistaNombre} onChange={(event) => setArtistaNombre(event.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3" /></div>
+            <div><label className="mb-2 block text-sm text-gray-400">WhatsApp del artista</label><input type="tel" inputMode="tel" value={artistaWhatsApp} onChange={(event) => setArtistaWhatsApp(event.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3" placeholder="+52 55 1234 5678" /><p className="mt-2 text-xs text-gray-500">Incluye el código de país, por ejemplo +52 para México.</p></div>
             <div>
               <label className="mb-3 block text-sm text-gray-400">Fotografía del artista</label>
               <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
