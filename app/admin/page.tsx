@@ -8,6 +8,8 @@ import {
   deleteDoc,
   doc,
   updateDoc,
+  getDoc,
+  setDoc,
   getFirestore,
 } from "firebase/firestore";
 import {
@@ -21,6 +23,14 @@ import app from "../../firebase";
 
 const db = getFirestore(app);
 const auth = getAuth(app);
+const artistDoc = doc(db, "configuracion", "artista");
+type RedSocial = { nombre: string; url: string };
+const redesDisponibles = [
+  "Instagram", "Facebook", "X", "TikTok", "YouTube", "LinkedIn", "Pinterest", "Behance",
+  "WhatsApp", "Telegram", "Discord", "Twitch", "Snapchat", "Reddit", "Threads", "Bluesky",
+  "Spotify", "SoundCloud", "Vimeo", "Flickr", "Dribbble", "Tumblr", "Mastodon", "Patreon",
+  "WeChat", "VK", "GitHub", "Substack", "Bandcamp", "Sitio web", "Otra plataforma",
+];
 
 type Obra = {
   id: string;
@@ -31,6 +41,9 @@ type Obra = {
   descripcion: string;
   imagenUrl: string;
   audioUrl: string;
+  precio: string;
+  disponible: boolean;
+  categoria: string;
 };
 
 export default function AdminPage() {
@@ -46,6 +59,9 @@ export default function AdminPage() {
   const [dimensiones, setDimensiones] = useState("");
   const [anio, setAnio] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [categoria, setCategoria] = useState("Pintura");
+  const [precio, setPrecio] = useState("");
+  const [disponible, setDisponible] = useState(true);
 
   const [imagen, setImagen] = useState<File | null>(null);
   const [audio, setAudio] = useState<File | null>(null);
@@ -61,6 +77,18 @@ export default function AdminPage() {
   const [editDimensiones, setEditDimensiones] = useState("");
   const [editAnio, setEditAnio] = useState("");
   const [editDescripcion, setEditDescripcion] = useState("");
+  const [editCategoria, setEditCategoria] = useState("Pintura");
+  const [editPrecio, setEditPrecio] = useState("");
+  const [editDisponible, setEditDisponible] = useState(true);
+  const [editImagen, setEditImagen] = useState<File | null>(null);
+  const [editAudio, setEditAudio] = useState<File | null>(null);
+  const [artistaNombre, setArtistaNombre] = useState("Yasiel Pérez Díaz");
+  const [artistaBio, setArtistaBio] = useState("");
+  const [fotoArtistaUrl, setFotoArtistaUrl] = useState("");
+  const [fotoArtista, setFotoArtista] = useState<File | null>(null);
+  const [vistaPreviaFoto, setVistaPreviaFoto] = useState("");
+  const [redes, setRedes] = useState<RedSocial[]>([{ nombre: "Instagram", url: "" }]);
+  const [guardandoPerfil, setGuardandoPerfil] = useState(false);
 
   useEffect(() => {
     const cancelar = onAuthStateChanged(auth, (usuarioActual) => {
@@ -70,6 +98,46 @@ export default function AdminPage() {
 
     return () => cancelar();
   }, []);
+
+  useEffect(() => {
+    if (!fotoArtista) { setVistaPreviaFoto(""); return; }
+    const urlTemporal = URL.createObjectURL(fotoArtista);
+    setVistaPreviaFoto(urlTemporal);
+    return () => URL.revokeObjectURL(urlTemporal);
+  }, [fotoArtista]);
+
+  useEffect(() => {
+    async function cargarPerfil() {
+      try {
+        const perfil = await getDoc(artistDoc);
+        if (perfil.exists()) {
+          const datos = perfil.data();
+          setArtistaNombre(datos.nombre || "Yasiel Pérez Díaz");
+          setArtistaBio(datos.biografia || "");
+          setFotoArtistaUrl(datos.fotoUrl || "");
+          const redesGuardadas = datos.redes;
+          setRedes(Array.isArray(redesGuardadas)
+            ? (redesGuardadas.length ? redesGuardadas : [{ nombre: "Instagram", url: "" }])
+            : Object.entries(redesGuardadas || {}).map(([nombre, url]) => ({ nombre, url: String(url) })));
+        }
+      } catch (error) { console.error("Error cargando el perfil:", error); }
+    }
+    cargarPerfil();
+  }, []);
+
+  async function guardarPerfilArtista() {
+    setGuardandoPerfil(true);
+    try {
+      const fotoUrl = fotoArtista ? await subirArchivo(fotoArtista, "image") : fotoArtistaUrl;
+      await setDoc(artistDoc, { nombre: artistaNombre, biografia: artistaBio, fotoUrl, redes: redes.filter((red) => red.nombre.trim() && red.url.trim()) }, { merge: true });
+      setFotoArtistaUrl(fotoUrl);
+      setFotoArtista(null);
+      setMensaje("Ficha del artista actualizada correctamente.");
+    } catch (error) {
+      console.error(error);
+      setMensaje("No se pudo guardar la ficha del artista.");
+    } finally { setGuardandoPerfil(false); }
+  }
 
   useEffect(() => {
     async function cargarObras() {
@@ -88,6 +156,9 @@ export default function AdminPage() {
             descripcion: datos.descripcion || "",
             imagenUrl: datos.imagenUrl || "",
             audioUrl: datos.audioUrl || "",
+            precio: datos.precio || "",
+            disponible: datos.disponible ?? true,
+            categoria: datos.categoria || "Pintura",
           };
         });
 
@@ -153,6 +224,11 @@ export default function AdminPage() {
     setEditDimensiones(obra.dimensiones);
     setEditAnio(obra.anio);
     setEditDescripcion(obra.descripcion);
+    setEditCategoria(obra.categoria || "Pintura");
+    setEditPrecio(obra.precio || "");
+    setEditDisponible(obra.disponible ?? true);
+    setEditImagen(null);
+    setEditAudio(null);
 
     window.scrollTo({
       top: document.body.scrollHeight,
@@ -170,13 +246,20 @@ export default function AdminPage() {
     }
 
     try {
-      await updateDoc(doc(db, "obras", obraEditando.id), {
+      setSubiendo(true);
+      const cambios: Record<string, string | boolean> = {
         titulo: editTitulo,
         tecnica: editTecnica,
         dimensiones: editDimensiones,
         anio: editAnio,
         descripcion: editDescripcion,
-      });
+        categoria: editCategoria,
+        precio: editPrecio,
+        disponible: editDisponible,
+      };
+      if (editImagen) cambios.imagenUrl = await subirArchivo(editImagen, "image");
+      if (editAudio) cambios.audioUrl = await subirArchivo(editAudio, "raw");
+      await updateDoc(doc(db, "obras", obraEditando.id), cambios);
 
       setObras((obrasActuales) =>
         obrasActuales.map((obra) =>
@@ -188,6 +271,11 @@ export default function AdminPage() {
                 dimensiones: editDimensiones,
                 anio: editAnio,
                 descripcion: editDescripcion,
+                categoria: editCategoria,
+                precio: editPrecio,
+                disponible: editDisponible,
+                imagenUrl: typeof cambios.imagenUrl === "string" ? cambios.imagenUrl : obra.imagenUrl,
+                audioUrl: typeof cambios.audioUrl === "string" ? cambios.audioUrl : obra.audioUrl,
               }
             : obra
         )
@@ -198,6 +286,8 @@ export default function AdminPage() {
     } catch (error) {
       console.error(error);
       setMensaje("No se pudo actualizar la obra.");
+    } finally {
+      setSubiendo(false);
     }
   }
 
@@ -261,6 +351,9 @@ export default function AdminPage() {
         dimensiones,
         anio,
         descripcion,
+        categoria,
+        precio,
+        disponible,
         imagenUrl,
         audioUrl,
         nombreImagen: imagen.name,
@@ -275,6 +368,9 @@ export default function AdminPage() {
       setDimensiones("");
       setAnio("");
       setDescripcion("");
+      setCategoria("Pintura");
+      setPrecio("");
+      setDisponible(true);
       setImagen(null);
       setAudio(null);
 
@@ -292,6 +388,9 @@ export default function AdminPage() {
           descripcion: datos.descripcion || "",
           imagenUrl: datos.imagenUrl || "",
           audioUrl: datos.audioUrl || "",
+          precio: datos.precio || "",
+          disponible: datos.disponible ?? true,
+          categoria: datos.categoria || "Pintura",
         };
       });
 
@@ -407,6 +506,37 @@ export default function AdminPage() {
 
         </div>
 
+        <section className="mb-12 border border-zinc-800 p-6 md:p-10">
+          <p className="text-xs tracking-[0.25em] text-red-400">PERFIL PÚBLICO</p>
+          <h2 className="mb-7 mt-3 text-2xl font-light">Ficha del artista</h2>
+          <div className="space-y-5">
+            <div><label className="mb-2 block text-sm text-gray-400">Nombre del artista</label><input value={artistaNombre} onChange={(event) => setArtistaNombre(event.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3" /></div>
+            <div>
+              <label className="mb-3 block text-sm text-gray-400">Fotografía del artista</label>
+              <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+                <div className="grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-900 text-xs text-gray-500">
+                  {(vistaPreviaFoto || fotoArtistaUrl) ? <img src={vistaPreviaFoto || fotoArtistaUrl} alt="Vista previa del artista" className="h-full w-full object-cover" /> : "Sin foto"}
+                </div>
+                <div className="space-y-2"><input type="file" accept="image/*" onChange={(event) => setFotoArtista(event.target.files?.[0] || null)} className="w-full text-sm text-gray-400" /><p className="text-xs text-gray-500">La foto se mostrará en la ficha pública del artista.</p>{fotoArtista && <button type="button" onClick={() => setFotoArtista(null)} className="text-xs text-gray-400 underline">Cancelar reemplazo</button>}</div>
+              </div>
+            </div>
+            <div><label className="mb-2 block text-sm text-gray-400">Información sobre el artista</label><textarea value={artistaBio} onChange={(event) => setArtistaBio(event.target.value)} rows={6} maxLength={3000} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3" placeholder="Trayectoria, inspiración, técnicas, exposiciones..." /></div>
+            <h3 className="pt-2 text-sm text-gray-300">Redes sociales, portafolios y sitios web</h3>
+            <div className="space-y-3">
+              {redes.map((red, indice) => <div key={indice} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
+                <div>
+                  <select value={redesDisponibles.includes(red.nombre) ? red.nombre : "Otra plataforma"} onChange={(event) => setRedes((actuales) => actuales.map((item, i) => i === indice ? { ...item, nombre: event.target.value === "Otra plataforma" ? "" : event.target.value } : item))} aria-label="Seleccionar red social" className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3 text-white">{redesDisponibles.map((nombre) => <option key={nombre} value={nombre}>{nombre}</option>)}</select>
+                  {(!red.nombre || !redesDisponibles.includes(red.nombre)) && <input value={red.nombre} onChange={(event) => setRedes((actuales) => actuales.map((item, i) => i === indice ? { ...item, nombre: event.target.value } : item))} aria-label="Nombre de otra plataforma" className="mt-2 w-full border border-zinc-700 bg-zinc-900 px-4 py-3" placeholder="Nombre de la plataforma" />}
+                </div>
+                <input type="url" value={red.url} onChange={(event) => setRedes((actuales) => actuales.map((item, i) => i === indice ? { ...item, url: event.target.value } : item))} aria-label="Enlace de la red social" className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3" placeholder="https://..." />
+                <button type="button" onClick={() => setRedes((actuales) => actuales.filter((_, i) => i !== indice))} aria-label="Quitar enlace" className="min-h-12 border border-zinc-700 px-4 text-gray-400 hover:border-red-500 hover:text-red-400">×</button>
+              </div>)}
+            </div>
+            <button type="button" onClick={() => setRedes((actuales) => [...actuales, { nombre: "", url: "" }])} className="border border-zinc-700 px-4 py-3 text-sm text-gray-300 hover:border-white">+ Añadir otra red o enlace</button>
+            <button onClick={guardarPerfilArtista} disabled={guardandoPerfil} className="min-h-12 bg-white px-6 py-3 text-sm text-black transition hover:bg-gray-200 disabled:opacity-50">{guardandoPerfil ? "GUARDANDO..." : "GUARDAR FICHA DEL ARTISTA"}</button>
+          </div>
+        </section>
+
         <div className="border border-zinc-800 p-6 md:p-10">
 
           <h2 className="text-2xl font-light mb-8">
@@ -440,6 +570,12 @@ export default function AdminPage() {
                 placeholder="Óleo sobre lienzo"
               />
             </div>
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div><label className="mb-2 block text-sm text-gray-400">Categoría</label><select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3 text-white">{["Pintura", "Grabado", "Ilustración", "Escultura"].map((item) => <option key={item}>{item}</option>)}</select></div>
+              <div><label className="mb-2 block text-sm text-gray-400">Precio (MXN)</label><input type="number" min="0" value={precio} onChange={(e) => setPrecio(e.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3" placeholder="Ej. 4500" /></div>
+            </div>
+            <label className="flex items-center gap-3 text-sm text-gray-300"><input type="checkbox" checked={disponible} onChange={(e) => setDisponible(e.target.checked)} className="h-4 w-4 accent-red-500" /> Disponible para venta</label>
 
             <div>
               <label className="block text-sm text-gray-400 mb-2">
@@ -573,9 +709,10 @@ export default function AdminPage() {
                       {obra.tecnica}
                     </p>
 
-                    <p className="text-gray-600 text-sm">
-                      {obra.dimensiones} · {obra.anio}
-                    </p>
+              <p className="text-gray-600 text-sm">
+                {obra.dimensiones} · {obra.anio}
+              </p>
+                    <p className="mt-1 text-sm text-gray-400">{obra.categoria} · {obra.disponible ? "Disponible" : "Vendida"}{obra.precio ? ` · $${obra.precio} MXN` : ""}</p>
 
                     <div className="flex gap-3 mt-5">
 
@@ -650,12 +787,18 @@ export default function AdminPage() {
                   Técnica
                 </label>
 
-                <input
-                  value={editTecnica}
-                  onChange={(e) => setEditTecnica(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 px-4 py-3 outline-none focus:border-red-500"
-                />
-              </div>
+              <input
+                value={editTecnica}
+                onChange={(e) => setEditTecnica(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-700 px-4 py-3 outline-none focus:border-red-500"
+              />
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div><label className="mb-2 block text-sm text-gray-400">Categoría</label><select value={editCategoria} onChange={(e) => setEditCategoria(e.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3 text-white">{["Pintura", "Grabado", "Ilustración", "Escultura"].map((item) => <option key={item}>{item}</option>)}</select></div>
+              <div><label className="mb-2 block text-sm text-gray-400">Precio (MXN)</label><input type="number" min="0" value={editPrecio} onChange={(e) => setEditPrecio(e.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3" /></div>
+            </div>
+            <label className="flex items-center gap-3 text-sm text-gray-300"><input type="checkbox" checked={editDisponible} onChange={(e) => setEditDisponible(e.target.checked)} className="h-4 w-4 accent-red-500" /> Disponible para venta</label>
 
               <div>
                 <label className="block text-sm text-gray-400 mb-2">
@@ -686,21 +829,27 @@ export default function AdminPage() {
                   Descripción
                 </label>
 
-                <textarea
-                  value={editDescripcion}
-                  onChange={(e) => setEditDescripcion(e.target.value)}
-                  rows={5}
-                  className="w-full bg-zinc-900 border border-zinc-700 px-4 py-3 outline-none focus:border-red-500"
-                />
-              </div>
+              <textarea
+                value={editDescripcion}
+                onChange={(e) => setEditDescripcion(e.target.value)}
+                rows={5}
+                className="w-full bg-zinc-900 border border-zinc-700 px-4 py-3 outline-none focus:border-red-500"
+              />
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div><label className="mb-2 block text-sm text-gray-400">Reemplazar imagen (opcional)</label><input type="file" accept="image/*" onChange={(e) => setEditImagen(e.target.files?.[0] || null)} className="w-full text-sm text-gray-400" />{editImagen && <p className="mt-2 text-xs text-gray-500">Nueva imagen: {editImagen.name}</p>}</div>
+              <div><label className="mb-2 block text-sm text-gray-400">Reemplazar audio (opcional)</label><input type="file" accept="audio/*" onChange={(e) => setEditAudio(e.target.files?.[0] || null)} className="w-full text-sm text-gray-400" />{editAudio && <p className="mt-2 text-xs text-gray-500">Nuevo audio: {editAudio.name}</p>}</div>
+            </div>
 
               <div className="flex gap-3">
 
-                <button
-                  onClick={guardarEdicion}
-                  className="bg-white text-black px-6 py-3 hover:bg-gray-200 transition"
-                >
-                  GUARDAR CAMBIOS
+              <button
+                onClick={guardarEdicion}
+                disabled={subiendo}
+                className="bg-white text-black px-6 py-3 hover:bg-gray-200 transition"
+              >
+                {subiendo ? "GUARDANDO..." : "GUARDAR CAMBIOS"}
                 </button>
 
                 <button

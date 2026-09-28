@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #11100f;
+  --foreground: #f4efe7;
 }
 
 @theme inline {
@@ -23,4 +23,34 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+::selection { background: #bf775f; color: #11100f; }
+.hero-art {
+  position: relative;
+  isolation: isolate;
+  background: radial-gradient(ellipse at 78% 48%, rgb(126 77 57 / 17%), transparent 38%), linear-gradient(115deg, #11100f 15%, #171411 72%, #201712);
+}
+.hero-art::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 0 52%;
+  opacity: .16;
+  background: repeating-linear-gradient(112deg, transparent 0 34px, #b99b82 35px, transparent 36px 79px);
+  mask-image: linear-gradient(90deg, transparent, #000);
+}
+.eyebrow { color: #bf8871; font-size: 10px; letter-spacing: .27em; }
+.display-title { font-family: Georgia, "Times New Roman", serif; }
+.animate-reveal { animation: reveal-in .65s both; }
+.audio-panel { border: 1px solid #484139; background: linear-gradient(135deg, #211e1a, #191613); }
+.audio-glyph { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid #815d4d; border-radius: 50%; color: #d2a08c; font-size: 20px; }
+.art-audio { height: 38px; accent-color: #bf775f; }
+.art-audio::-webkit-media-controls-enclosure { border-radius: 4px; background: #d6c6ae; }
+.hide-scrollbar { scrollbar-width: none; }
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+@keyframes reveal-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
