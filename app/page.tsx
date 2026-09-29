@@ -169,28 +169,27 @@ export default function Home() {
   const enlaceWhatsAppArtista = `https://wa.me/${perfil.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent("Hola me gustaría saber un poco más de su obra")}`;
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#11100f] text-[#f4efe7]">
-      <section className="hero-art flex min-h-[88svh] flex-col justify-center px-6 py-24 sm:px-10 md:min-h-screen md:px-20">
+    <main className="site-shell min-h-screen overflow-x-hidden bg-[#080909] text-[#f4efe7]">
+      <header className="site-header sticky top-0 z-40 border-b border-white/10 bg-[#080909]/95 px-5 backdrop-blur-xl sm:px-8">
+        <div className="mx-auto flex h-[4.5rem] max-w-[1440px] items-center justify-between">
+          <a href="#inicio" className="brand-lockup" aria-label="Estudio de Arte Yass, inicio"><span className="brand-mark">Y</span><span><small>ESTUDIO DE ARTE</small><strong>YASS</strong></span></a>
+          <a href="/admin" className="admin-link">♙ <span>Admin</span></a>
+        </div>
+      </header>
+      <section id="inicio" className="hero-art flex min-h-[76svh] flex-col justify-center px-6 py-24 sm:px-10 md:min-h-[82svh] md:px-20">
         <div className="mx-auto w-full max-w-7xl">
-          <div className="mb-9 flex flex-wrap items-center gap-x-7 gap-y-5 sm:mb-12">
-            <a href="#artista" aria-label={`Conoce más sobre ${perfil.nombre}`} className="group inline-flex items-center gap-4 rounded-full text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#bf775f]">
-              {fotoArtistaUrl ? <img src={fotoArtistaUrl} alt={`Retrato de ${perfil.nombre}`} className="h-[4.5rem] w-[4.5rem] rounded-full border border-[#9d6d5b] object-cover transition duration-300 group-hover:scale-105 group-hover:border-[#e0aa91] sm:h-20 sm:w-20" /> : <span className="grid h-[4.5rem] w-[4.5rem] place-items-center rounded-full border border-[#9d6d5b] bg-[#211e1a] font-serif text-xl text-[#d2a08c] transition group-hover:border-[#e0aa91] sm:h-20 sm:w-20">{perfil.nombre.split(/\s+/).slice(0, 2).map((parte) => parte[0]).join("")}</span>}
-              <span><span className="block text-[10px] tracking-[0.2em] text-[#bf8871]">EL ARTISTA</span><span className="mt-1 block font-serif text-lg text-[#f4efe7] group-hover:text-[#e0aa91] sm:text-xl">{perfil.nombre}</span><span className="mt-1 block text-xs text-[#938a7f]">Conoce su historia ↓</span></span>
-            </a>
-            {perfil.redes.some((red) => red.url?.trim()) && <div className="flex flex-wrap items-center gap-2" aria-label="Redes sociales del artista">{perfil.redes.filter((red) => red.url?.trim()).map((red, indice) => <a key={`${red.nombre}-${indice}`} href={red.url} target="_blank" rel="noreferrer" aria-label={red.nombre} title={red.nombre} className="grid h-11 w-11 place-items-center rounded-full border border-[#484139] text-[#d6c6ae] transition hover:border-[#bf775f] hover:bg-[#bf775f]/10 hover:text-white"><IconoRed nombre={red.nombre} /></a>)}</div>}
-          </div>
-          <p className="eyebrow">ESTUDIO DE ARTE · MÉXICO</p>
-          <h1 className="display-title mt-5 text-7xl font-light tracking-[-0.07em] sm:text-8xl md:text-[11rem]">YASS<span className="text-[#bf775f]">.</span></h1>
-          <div className="my-8 h-px w-20 bg-[#bf775f] sm:my-10 sm:w-28" />
-          <p className="max-w-xl font-serif text-xl leading-relaxed text-[#c8c0b5] sm:text-2xl">Pintura, grabado, ilustración y escultura.<br />Obras para mirar con tiempo.</p>
-          <div className="mt-10 flex flex-wrap gap-3"><a href="#galeria" className="inline-flex min-h-14 items-center rounded-full border border-[#82796e] px-7 text-xs tracking-[0.2em] transition-all duration-300 hover:border-[#bf775f] hover:bg-[#bf775f] hover:text-[#11100f]">EXPLORAR LA COLECCIÓN <span className="ml-5">↓</span></a><button onClick={compartirPagina} className="inline-flex min-h-14 items-center gap-3 rounded-full border border-[#82796e] px-6 text-xs tracking-[0.15em] transition-all duration-300 hover:border-[#bf775f] hover:bg-white/[0.03]"><IconoCompartir /> COMPARTIR PÁGINA</button></div>
+          <div className="hero-copy"><p className="eyebrow">ESTUDIO DE ARTE</p>
+          <h1 className="mt-3 text-7xl font-semibold tracking-[0.12em] sm:text-8xl md:text-[7.5rem]">YASS</h1>
+          <div className="my-7 h-1 w-14 bg-[#f3262e]" />
+          <p className="hero-meta">PINTURA　·　GRABADO　·　ILUSTRACIÓN　·　ESCULTURA</p><p className="hero-intro">El arte como un espacio de encuentro<br/> entre lo que vemos y lo que sentimos.</p>
+          <a href="#galeria" className="hero-button">ENTRAR A LA GALERÍA　→</a></div>
         </div>
         <span className="absolute bottom-9 right-8 hidden text-[10px] tracking-[0.28em] text-[#8e857a] md:block">OBRA ORIGINAL · HECHA A MANO</span>
       </section>
 
-      <section id="galeria" className="scroll-mt-4 px-5 py-20 sm:px-8 sm:py-28 md:px-16">
-        <div className="mx-auto max-w-7xl">
-          <div className="mb-10" ref={filtrosRef}>
+      <section id="galeria" className="gallery-section scroll-mt-4 px-5 py-14 sm:px-8 sm:py-20 md:px-12">
+        <div className="mx-auto max-w-[1440px]">
+          <div className="section-heading mb-7"><div><p className="eyebrow">COLECCIÓN</p><h2 className="mt-2 text-3xl font-medium tracking-wide">Galería</h2><p className="mt-1 text-sm text-white/60">Cada obra es una historia, escúchala.</p></div></div><div className="mb-8" ref={filtrosRef}>
             <div className="relative inline-block">
               <button type="button" onClick={() => setFiltrosAbiertos((abierto) => !abierto)} aria-expanded={filtrosAbiertos} aria-controls="menu-filtros-obras" className="inline-flex min-h-12 items-center gap-3 rounded-full border border-[#5a5046] bg-[#191714] px-5 text-sm text-[#e8dfd4] shadow-sm transition-all duration-300 hover:border-[#bf775f] hover:bg-[#211e1a]">
                 <IconoFiltro /> <span>Filtrar obras</span>
@@ -206,20 +205,20 @@ export default function Home() {
             {(categoria !== "Todas" || disponibilidad !== "Todas") && <span className="ml-3 text-xs text-[#938a7f]">{obrasFiltradas.length} {obrasFiltradas.length === 1 ? "obra" : "obras"}</span>}
           </div>
           {cargando ? <p className="text-[#938a7f]">Cargando obras...</p> : obrasFiltradas.length === 0 ? <p className="py-12 text-[#938a7f]">{obras.length ? "No hay obras con estos filtros." : "Próximamente, nuevas obras."}</p> :
-            <div className="grid grid-cols-1 gap-x-7 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-              {obrasFiltradas.map((obra, indice) => <article key={obra.id} className="art-card group animate-reveal rounded-2xl border border-white/[0.045] bg-white/[0.015] p-2.5 pb-4 transition-all duration-500 hover:border-[#bf775f]/25 hover:bg-white/[0.035]" style={{ animationDelay: `${Math.min(indice, 8) * 70}ms` }}>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:gap-x-6">
+              {obrasFiltradas.map((obra, indice) => <article key={obra.id} className="art-card group animate-reveal transition-all duration-500" style={{ animationDelay: `${Math.min(indice, 8) * 70}ms` }}>
                 <button onClick={() => setObraSeleccionada(obra)} className="block w-full text-left" aria-label={`Ver ${obra.titulo}`}>
-                  <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-[#211e1a]">
+                  <div className="relative aspect-[1.12/1] overflow-hidden bg-[#211e1a]">
                     {obra.imagenUrl && <img src={obra.imagenUrl} alt={obra.titulo} loading="lazy" className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.035]" />}
                     <span className="absolute left-4 top-4 rounded-full bg-[#11100f]/75 px-3 py-2 text-[10px] uppercase tracking-[0.16em] backdrop-blur">{obra.categoria}</span>
                     <span className={`absolute right-4 top-4 rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.12em] ${obra.disponible ? "bg-[#e9e1d5] text-[#28231e]" : "bg-[#37332f] text-[#d2c8bb]"}`}>{obra.disponible ? "Disponible" : "Vendida"}</span>
                   </div>
-                  <div className="flex items-start justify-between gap-3 pt-4">
-                    <div><h3 className="font-serif text-xl sm:text-2xl">{obra.titulo}</h3><p className="mt-1.5 text-sm text-[#938a7f]">{obra.tecnica}{obra.anio ? ` · ${obra.anio}` : ""}</p></div>
+                  <div className="flex items-start justify-between gap-2 pt-2">
+                    <div><h3 className="text-sm font-medium sm:text-base">{obra.titulo}</h3><p className="mt-1 text-[10px] text-white/60 sm:text-xs">{obra.tecnica}{obra.dimensiones ? ` · ${obra.dimensiones}` : ""}{obra.anio ? ` · ${obra.anio}` : ""}</p></div>
                     <span className="shrink-0 pt-1 text-sm text-[#d2a08c]">{obra.precio ? `$${obra.precio}` : "Consultar"}</span>
                   </div>
                 </button>
-                <div className="mt-4 flex gap-3">
+                <div className="mt-3 flex gap-2">
                   <a href={enlaceWhatsApp(obra)} target="_blank" rel="noreferrer" className="flex min-h-11 flex-1 items-center justify-center rounded-full bg-[#d6c6ae] px-3 text-center text-[10px] font-medium tracking-[0.12em] text-[#211e1a] transition-all duration-300 hover:bg-[#bf775f]">{obra.disponible ? "COMPRAR / CONSULTAR" : "CONSULTAR OBRA"}</a>
                   <button onClick={() => compartir(obra)} aria-label={`Compartir ${obra.titulo}`} className="grid min-h-11 min-w-12 place-items-center rounded-full border border-[#484139] text-[#d6c6ae] transition-all duration-300 hover:border-[#bf775f] hover:bg-[#bf775f]/10" title="Compartir"><IconoCompartir /></button>
                 </div>
@@ -254,7 +253,7 @@ export default function Home() {
       </div>}
       {aviso && <div role="status" className="fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 bg-[#e9e1d5] px-5 py-3 text-sm text-[#211e1a]">{aviso}</div>}
       <a href={enlaceWhatsAppArtista} target="_blank" rel="noreferrer" aria-label="Contactar al artista por WhatsApp" title="Contactar al artista por WhatsApp" className="whatsapp-float fixed bottom-5 right-5 z-40 grid h-14 w-14 place-items-center rounded-full bg-[#25d366] text-white shadow-xl transition hover:scale-105 sm:bottom-7 sm:right-7 sm:h-16 sm:w-16"><svg viewBox="0 0 32 32" aria-hidden="true" className="h-7 w-7 fill-current sm:h-8 sm:w-8"><path d="M16 3a12.8 12.8 0 0 0-10.9 19.5L3.4 29l6.7-1.7A12.9 12.9 0 1 0 16 3Zm0 23.4c-2 0-3.9-.5-5.6-1.6l-.4-.2-4 .9 1-3.9-.3-.4a10.5 10.5 0 1 1 9.3 5.2Zm5.8-7.9c-.3-.2-1.8-.9-2.1-1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.2-.7.1-.3-.2-1.3-.5-2.5-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.7l.5-.6c.2-.2.2-.3.3-.5.1-.2 0-.4 0-.6l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.3-1.2 1.1-1.2 2.7s1.2 3.1 1.4 3.3c.2.2 2.3 3.5 5.5 4.8.8.4 1.5.6 2 .7.8.3 1.6.2 2.2.1.7-.1 1.8-.7 2-1.4.3-.7.3-1.3.2-1.4-.1-.2-.3-.3-.6-.4Z" /></svg></a>
-      <footer className="flex flex-col gap-3 px-6 py-8 text-xs tracking-wide text-[#80776c] sm:flex-row sm:items-center sm:justify-between md:px-16"><span>ESTUDIO DE ARTE YASS</span><button onClick={compartirPagina} className="inline-flex items-center gap-2 self-start text-[#d6c6ae] hover:text-white sm:self-auto"><IconoCompartir /> Compartir página</button><span>© 2026 · Hecho con intención</span></footer>
+      <footer id="contacto" className="site-footer flex flex-col gap-4 px-6 py-6 text-xs tracking-wide sm:flex-row sm:items-center sm:justify-between md:px-12"><a href="#inicio" className="brand-lockup"><span className="brand-mark">Y</span><strong>ESTUDIO DE ARTE YASS</strong></a><span className="hidden uppercase tracking-[0.2em] text-white/65 sm:block">Pintura　·　Grabado　·　Ilustración　·　Escultura</span><div className="flex items-center gap-5"><button onClick={compartirPagina} aria-label="Compartir página" className="text-white hover:text-[#f3262e]"><IconoCompartir /></button><span>© 2026</span></div></footer>
     </main>
   );
 }

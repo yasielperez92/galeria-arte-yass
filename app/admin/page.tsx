@@ -31,6 +31,8 @@ const redesDisponibles = [
   "Spotify", "SoundCloud", "Vimeo", "Flickr", "Dribbble", "Tumblr", "Mastodon", "Patreon",
   "WeChat", "VK", "GitHub", "Substack", "Bandcamp", "Sitio web", "Otra plataforma",
 ];
+const tecnicasDisponibles = ["Óleo sobre lienzo", "Dibujo", "Grabado", "Acrílico sobre lienzo", "Acuarela", "Grafito sobre papel", "Tinta sobre papel", "Técnica mixta", "Escultura"];
+const aniosDisponibles = Array.from({ length: new Date().getFullYear() - 1899 }, (_, indice) => String(new Date().getFullYear() - indice));
 
 type Obra = {
   id: string;
@@ -47,6 +49,7 @@ type Obra = {
 };
 
 export default function AdminPage() {
+  const [seccionActiva, setSeccionActiva] = useState<"perfil" | "agregar" | "obras" | "editar">("obras");
   const [usuario, setUsuario] = useState<User | null>(null);
   const [cargandoUsuario, setCargandoUsuario] = useState(true);
 
@@ -56,7 +59,9 @@ export default function AdminPage() {
 
   const [titulo, setTitulo] = useState("");
   const [tecnica, setTecnica] = useState("");
-  const [dimensiones, setDimensiones] = useState("");
+  const [ancho, setAncho] = useState(20);
+  const [alto, setAlto] = useState(20);
+  const [unidad, setUnidad] = useState("cm");
   const [anio, setAnio] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [categoria, setCategoria] = useState("Pintura");
@@ -65,6 +70,9 @@ export default function AdminPage() {
 
   const [imagen, setImagen] = useState<File | null>(null);
   const [audio, setAudio] = useState<File | null>(null);
+  const [vistaPreviaObra, setVistaPreviaObra] = useState("");
+  const [analisisIAActivo, setAnalisisIAActivo] = useState(false);
+  const [analizandoImagen, setAnalizandoImagen] = useState(false);
 
   const [mensaje, setMensaje] = useState("");
   const [obras, setObras] = useState<Obra[]>([]);
@@ -106,6 +114,13 @@ export default function AdminPage() {
     setVistaPreviaFoto(urlTemporal);
     return () => URL.revokeObjectURL(urlTemporal);
   }, [fotoArtista]);
+
+  useEffect(() => {
+    if (!imagen) { setVistaPreviaObra(""); return; }
+    const urlTemporal = URL.createObjectURL(imagen);
+    setVistaPreviaObra(urlTemporal);
+    return () => URL.revokeObjectURL(urlTemporal);
+  }, [imagen]);
 
   useEffect(() => {
     async function cargarPerfil() {
@@ -219,6 +234,7 @@ export default function AdminPage() {
   }
 
   function comenzarEdicion(obra: Obra) {
+    setSeccionActiva("editar");
     setObraEditando(obra);
 
     setEditTitulo(obra.titulo);
@@ -240,6 +256,7 @@ export default function AdminPage() {
 
   function cancelarEdicion() {
     setObraEditando(null);
+    setSeccionActiva("obras");
   }
 
   async function guardarEdicion() {
@@ -330,27 +347,20 @@ export default function AdminPage() {
       return;
     }
 
-    if (!audio) {
-      setMensaje("Selecciona un audio para la obra.");
-      return;
-    }
-
     try {
       setSubiendo(true);
       setMensaje("Subiendo imagen...");
 
       const imagenUrl = await subirArchivo(imagen, "image");
 
-      setMensaje("Imagen subida. Subiendo audio...");
-
-      const audioUrl = await subirArchivo(audio, "raw");
+      const audioUrl = audio ? await subirArchivo(audio, "raw") : "";
 
       setMensaje("Guardando obra...");
 
       await addDoc(collection(db, "obras"), {
         titulo,
         tecnica,
-        dimensiones,
+        dimensiones: `${ancho} × ${alto} ${unidad}`,
         anio,
         descripcion,
         categoria,
@@ -359,7 +369,7 @@ export default function AdminPage() {
         imagenUrl,
         audioUrl,
         nombreImagen: imagen.name,
-        nombreAudio: audio.name,
+        nombreAudio: audio?.name || "",
         fechaCreacion: new Date().toISOString(),
       });
 
@@ -367,7 +377,9 @@ export default function AdminPage() {
 
       setTitulo("");
       setTecnica("");
-      setDimensiones("");
+      setAncho(20);
+      setAlto(20);
+      setUnidad("cm");
       setAnio("");
       setDescripcion("");
       setCategoria("Pintura");
@@ -375,6 +387,7 @@ export default function AdminPage() {
       setDisponible(true);
       setImagen(null);
       setAudio(null);
+      setAnalisisIAActivo(false);
 
       const consulta = await getDocs(collection(db, "obras"));
 
@@ -404,6 +417,45 @@ export default function AdminPage() {
       );
     } finally {
       setSubiendo(false);
+    }
+  }
+
+  async function analizarImagenConIA() {
+    if (!imagen) {
+      setMensaje("Primero selecciona una imagen para analizar.");
+      return;
+    }
+    if (imagen.size > 8 * 1024 * 1024) {
+      setMensaje("La imagen debe pesar menos de 8 MB para el análisis.");
+      return;
+    }
+
+    try {
+      setAnalizandoImagen(true);
+      setMensaje("Analizando la imagen...");
+      const imageDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("No se pudo leer la imagen."));
+        reader.onerror = () => reject(new Error("No se pudo leer la imagen."));
+        reader.readAsDataURL(imagen);
+      });
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error("La sesión expiró. Vuelve a iniciar sesión.");
+
+      const response = await fetch("/api/analizar-obra", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ imageDataUrl }),
+      });
+      const resultado = await response.json().catch(() => ({ error: "El análisis de IA aún no está configurado para este sitio." }));
+      if (!response.ok) throw new Error(resultado.error || "No se pudo analizar la imagen.");
+
+      setDescripcion((actual) => actual ? `${actual.trim()}\n\n${resultado.descripcion}` : resultado.descripcion);
+      setMensaje("Análisis agregado a la descripción. Puedes editarlo antes de guardar.");
+    } catch (error) {
+      setMensaje(error instanceof Error ? error.message : "No se pudo analizar la imagen.");
+    } finally {
+      setAnalizandoImagen(false);
     }
   }
 
@@ -508,7 +560,13 @@ export default function AdminPage() {
 
         </div>
 
-        <section className="mb-12 border border-zinc-800 p-6 md:p-10">
+        <nav className="admin-action-menu mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Acciones de administración">
+          <button type="button" onClick={() => setSeccionActiva("perfil")} aria-current={seccionActiva === "perfil" ? "page" : undefined} className={seccionActiva === "perfil" ? "admin-action active" : "admin-action"}><span>01</span><strong>Perfil público</strong><small>Editar información y redes</small></button>
+          <button type="button" onClick={() => setSeccionActiva("agregar")} aria-current={seccionActiva === "agregar" ? "page" : undefined} className={seccionActiva === "agregar" ? "admin-action active" : "admin-action"}><span>02</span><strong>Agregar obra</strong><small>Publicar una nueva pieza</small></button>
+          <button type="button" onClick={() => setSeccionActiva("obras")} aria-current={seccionActiva === "obras" ? "page" : undefined} className={seccionActiva === "obras" ? "admin-action active" : "admin-action"}><span>03</span><strong>Mis obras</strong><small>Administrar la colección</small></button>
+        </nav>
+        {seccionActiva === "perfil" && (
+          <section className="mb-12 border border-zinc-800 p-6 md:p-10">
           <p className="text-xs tracking-[0.25em] text-red-400">PERFIL PÚBLICO</p>
           <h2 className="mb-7 mt-3 text-2xl font-light">Ficha del artista</h2>
           <div className="space-y-5">
@@ -539,14 +597,29 @@ export default function AdminPage() {
             <button onClick={guardarPerfilArtista} disabled={guardandoPerfil} className="min-h-12 bg-white px-6 py-3 text-sm text-black transition hover:bg-gray-200 disabled:opacity-50">{guardandoPerfil ? "GUARDANDO..." : "GUARDAR FICHA DEL ARTISTA"}</button>
           </div>
         </section>
+        )}
 
-        <div className="border border-zinc-800 p-6 md:p-10">
+        {seccionActiva === "agregar" && (
+          <div className="border border-zinc-800 p-6 md:p-10">
 
           <h2 className="text-2xl font-light mb-8">
             Agregar nueva obra
           </h2>
 
           <div className="space-y-6">
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="admin-upload-card admin-image-upload">
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setImagen(e.target.files?.[0] || null)} className="sr-only" />
+                {vistaPreviaObra ? <img src={vistaPreviaObra} alt="Vista previa de la obra" className="admin-upload-preview" /> : <span className="admin-upload-icon" aria-hidden="true">＋</span>}
+                <span className="admin-upload-copy"><strong>{imagen ? "Cambiar imagen" : "Agregar imagen"}</strong><small>{imagen ? imagen.name : "JPG, PNG o WEBP · Requerida"}</small></span>
+              </label>
+              <label className="admin-upload-card admin-audio-upload">
+                <input type="file" accept="audio/*" onChange={(e) => setAudio(e.target.files?.[0] || null)} className="sr-only" />
+                <span className="admin-upload-icon" aria-hidden="true">♫</span>
+                <span className="admin-upload-copy"><strong>{audio ? "Cambiar audio" : "Agregar audio"}</strong><small>{audio ? audio.name : "MP3 u otro formato · Opcional"}</small></span>
+              </label>
+            </div>
 
             <div>
               <label className="block text-sm text-gray-400 mb-2">
@@ -566,12 +639,10 @@ export default function AdminPage() {
                 Técnica
               </label>
 
-              <input
-                value={tecnica}
-                onChange={(e) => setTecnica(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 px-4 py-3 outline-none focus:border-red-500"
-                placeholder="Óleo sobre lienzo"
-              />
+              <select value={tecnica} onChange={(e) => setTecnica(e.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3 text-white">
+                <option value="">Selecciona una técnica</option>
+                {tecnicasDisponibles.map((opcion) => <option key={opcion} value={opcion}>{opcion}</option>)}
+              </select>
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
@@ -585,12 +656,10 @@ export default function AdminPage() {
                 Dimensiones
               </label>
 
-              <input
-                value={dimensiones}
-                onChange={(e) => setDimensiones(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 px-4 py-3 outline-none focus:border-red-500"
-                placeholder="70 × 45 cm"
-              />
+              <div className="grid gap-5 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 sm:grid-cols-2">
+                {[["Ancho", ancho, setAncho], ["Alto", alto, setAlto]].map(([etiqueta, valor, actualizar]) => <label key={String(etiqueta)} className="dimension-slider"><span><span>{String(etiqueta)}</span><strong>{String(valor)} {unidad}</strong></span><input type="range" min="20" max="170" step="5" value={Number(valor)} onChange={(e) => (actualizar as (n: number) => void)(Number(e.target.value))} /><small>20–170, en intervalos de 5</small></label>)}
+                <label className="sm:col-span-2"><span className="mb-2 block text-sm text-gray-400">Unidad de medida</span><select value={unidad} onChange={(e) => setUnidad(e.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3 text-white"><option value="cm">Centímetros (cm)</option><option value="mm">Milímetros (mm)</option><option value="in">Pulgadas (in)</option></select></label>
+              </div>
             </div>
 
             <div>
@@ -598,57 +667,26 @@ export default function AdminPage() {
                 Año
               </label>
 
-              <input
-                value={anio}
-                onChange={(e) => setAnio(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 px-4 py-3 outline-none focus:border-red-500"
-                placeholder="2026"
-              />
+              <select value={anio} onChange={(e) => setAnio(e.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3 text-white"><option value="">Selecciona el año</option>{aniosDisponibles.map((opcion) => <option key={opcion} value={opcion}>{opcion}</option>)}</select>
             </div>
 
             <div>
-              <label className="block text-sm text-gray-400 mb-2">
-                Descripción
-              </label>
-
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <label htmlFor="descripcion-obra" className="block text-sm text-gray-400">Descripción</label>
+                <label className="ai-toggle"><input type="checkbox" checked={analisisIAActivo} onChange={(e) => setAnalisisIAActivo(e.target.checked)} /><span>✦</span> Sugerir análisis con IA</label>
+              </div>
+              {analisisIAActivo && <div className="ai-analysis-card mb-3"><p>OpenAI propondrá una lectura formal y conceptual a partir de la imagen. Podrás editar el texto antes de guardar. Cada análisis puede generar cargos de API.</p><button type="button" onClick={analizarImagenConIA} disabled={analizandoImagen || !imagen} className="ai-analysis-button">{analizandoImagen ? "Analizando imagen…" : "✦ Analizar imagen y redactar"}</button></div>}
               <textarea
+                id="descripcion-obra"
                 value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)}
                 rows={5}
                 className="w-full bg-zinc-900 border border-zinc-700 px-4 py-3 outline-none focus:border-red-500"
-                placeholder="Descripción de la obra"
+                placeholder="Describe la obra o usa el análisis como punto de partida..."
               />
             </div>
 
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">
-                Imagen de la obra
-              </label>
 
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) =>
-                  setImagen(e.target.files?.[0] || null)
-                }
-                className="w-full text-sm text-gray-400"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">
-                Audio de la obra
-              </label>
-
-              <input
-                type="file"
-                accept="audio/*"
-                onChange={(e) =>
-                  setAudio(e.target.files?.[0] || null)
-                }
-                className="w-full text-sm text-gray-400"
-              />
-            </div>
 
             <button
               onClick={guardarObra}
@@ -667,7 +705,10 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <div className="mt-12">
+        )}
+
+        {seccionActiva === "obras" && (
+          <div className="mt-12">
 
           <p className="text-red-500 text-sm tracking-[0.3em]">
             COLECCIÓN
@@ -746,9 +787,12 @@ export default function AdminPage() {
           )}
 
         </div>
+        )}
 
-        {obraEditando && (
+        {obraEditando && seccionActiva === "editar" && (
           <div className="mt-12 border border-zinc-700 p-6 md:p-10">
+
+            <button type="button" onClick={cancelarEdicion} className="mb-6 text-sm text-gray-400 hover:text-white">← Volver a mis obras</button>
 
             <div className="flex justify-between items-center mb-8">
 

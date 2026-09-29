@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyAXrOTe_UJ4picZEn-HxKf5rwOIZji-Pq8",
   authDomain: "galeria-arte-yass.firebaseapp.com",
   projectId: "galeria-arte-yass",

@@ -60,3 +60,70 @@ input:focus, textarea:focus, select:focus { border-color: #9d6d5b; box-shadow: 0
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* YASS gallery direction */
+:root { --background: #080909; --foreground: #f4efe7; --yass-red: #f3262e; }
+body { background: #080909; }
+.site-header { box-shadow: 0 8px 26px rgb(0 0 0 / 25%); }
+.brand-lockup { display: inline-flex; align-items: center; gap: .65rem; color: #fff; text-decoration: none; }
+.brand-lockup small { display: block; font-size: 7px; letter-spacing: .16em; line-height: 1.2; }
+.brand-lockup strong { display: block; font-size: 17px; letter-spacing: .12em; line-height: 1.1; }
+.brand-mark { display: grid; width: 2rem; height: 2rem; place-items: center; border: 2px solid var(--yass-red); color: var(--yass-red); font-family: Georgia,serif; font-size: 1.45rem; font-weight: 700; line-height: 1; }
+.site-header nav a { color: #e8e8e8; transition: color .2s; }
+.site-header nav a:hover, .admin-link:hover { color: var(--yass-red); }
+.admin-link { display: inline-flex; align-items: center; gap: .45rem; font-size: .72rem; color: #eee; }
+.hero-art { isolation: isolate; background: #080909 url('/obras/obra1.jpg') center 45% / cover no-repeat; }
+.hero-art::before { content: ''; position: absolute; z-index: -1; inset: 0; background: linear-gradient(90deg,#050606 0%,rgb(5 6 6 / 96%) 23%,rgb(5 6 6 / 78%) 42%,rgb(5 6 6 / 15%) 74%,rgb(5 6 6 / 15%) 100%),linear-gradient(0deg,rgb(0 0 0 / 34%),transparent 44%); }
+.hero-art::after { display: none; }
+.hero-copy { width: min(100%, 31rem); border-left: 5px solid var(--yass-red); padding-left: 1.5rem; }
+.hero-copy .eyebrow { color: white; letter-spacing: .23em; font-size: .9rem; }
+.hero-copy h1 { line-height: .95; }
+.hero-meta { margin-top: 1rem; font-size: .61rem; font-weight: 600; letter-spacing: .18em; white-space: nowrap; }
+.hero-intro { margin-top: 1.5rem; max-width: 27rem; font-size: .88rem; line-height: 1.7; color: rgb(255 255 255 / 84%); }
+.hero-button { display: inline-flex; min-height: 2.8rem; align-items: center; margin-top: 1.4rem; background: var(--yass-red); padding: 0 1.2rem; font-size: .68rem; font-weight: 700; letter-spacing: .06em; transition: background .2s; }
+.hero-button:hover { background: #ca161e; }
+.gallery-section { background: #080909; }
+.section-heading { border-left: 4px solid var(--yass-red); padding-left: 1rem; }
+.section-heading .eyebrow { color: var(--yass-red); }
+.gallery-section .art-card img { transition: transform .5s ease; }
+.gallery-section .art-card:hover img { transform: scale(1.035); }
+.gallery-section .art-card [aria-label^="Ver"] { overflow: hidden; }
+.site-footer { border-top: 1px solid rgb(255 255 255 / 9%); background: #101213; color: rgb(255 255 255 / 65%); }
+.site-footer .brand-lockup { font-size: .65rem; letter-spacing: .13em; }
+@media (max-width: 639px) {
+ .hero-art { min-height: 76svh; background-position: 62% center; }
+ .hero-art::before { background: linear-gradient(90deg,rgb(5 6 6 / 91%),rgb(5 6 6 / 72%) 64%,rgb(5 6 6 / 35%)); }
+ .hero-copy { padding-left: 1rem; }
+ .hero-meta { font-size: .47rem; letter-spacing: .08em; white-space: normal; }
+ .gallery-section { padding-top: 3rem; }
+}
+/* Admin workspace surfaces */
+.admin-workspace { background: #f4f5f6; color: #17191b; }
+.admin-workspace input, .admin-workspace textarea, .admin-workspace select { border-radius: 2px; }
+.admin-action { display: grid; gap: .4rem; min-height: 7rem; padding: 1rem; border: 1px solid #35383a; background: #111315; text-align: left; transition: border-color .2s, background .2s, transform .2s; }
+.admin-action:hover { border-color: #f3262e; transform: translateY(-2px); }
+.admin-action > span { color: #f3262e; font-size: .65rem; letter-spacing: .16em; }
+.admin-action strong { font-size: .95rem; font-weight: 500; }
+.admin-action small { color: #9ca3af; font-size: .72rem; }
+.admin-action.active { border-color: #f3262e; background: #241112; }
+.admin-upload-card { display: flex; min-height: 7rem; align-items: center; gap: 1rem; padding: 1rem; border: 1px dashed #55585b; border-radius: .8rem; background: linear-gradient(135deg, #17191b, #101112); cursor: pointer; transition: border-color .2s, background .2s, transform .2s; }
+.admin-upload-card:hover, .admin-upload-card:focus-within { transform: translateY(-2px); border-color: #f3262e; background: #211416; }
+.admin-audio-upload { border-style: solid; }
+.admin-upload-icon { display: grid; width: 3rem; height: 3rem; flex: 0 0 auto; place-items: center; border: 1px solid rgb(243 38 46 / 50%); border-radius: .75rem; background: rgb(243 38 46 / 10%); color: #ff555b; font-size: 1.6rem; }
+.admin-upload-copy { display: grid; min-width: 0; gap: .35rem; }
+.admin-upload-copy strong { font-size: .9rem; font-weight: 600; }
+.admin-upload-copy small { overflow: hidden; color: #a1a1aa; font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
+.admin-upload-preview { width: 3.5rem; height: 3.5rem; flex: 0 0 auto; border-radius: .65rem; object-fit: cover; }
+.dimension-slider { display: grid; gap: .7rem; }
+.dimension-slider > span { display: flex; justify-content: space-between; color: #d4d4d8; font-size: .85rem; }
+.dimension-slider > span strong { color: #fff; font-variant-numeric: tabular-nums; }
+.dimension-slider input[type="range"] { width: 100%; accent-color: #f3262e; }
+.dimension-slider small { color: #71717a; font-size: .68rem; }
+.ai-toggle { display: inline-flex; align-items: center; gap: .5rem; color: #fca5a5; font-size: .78rem; cursor: pointer; }
+.ai-toggle input { width: 1rem; height: 1rem; accent-color: #f3262e; }
+.ai-toggle > span { font-size: 1rem; }
+.ai-analysis-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: .9rem 1rem; border: 1px solid rgb(243 38 46 / 30%); border-radius: .75rem; background: linear-gradient(120deg, rgb(243 38 46 / 10%), rgb(161 98 7 / 9%)); }
+.ai-analysis-card p { max-width: 34rem; color: #d4d4d8; font-size: .75rem; line-height: 1.55; }
+.ai-analysis-button { min-height: 2.5rem; border-radius: .55rem; background: #f3262e; padding: 0 1rem; color: white; font-size: .75rem; font-weight: 600; transition: background .2s; }
+.ai-analysis-button:hover { background: #cf1e25; }
+.ai-analysis-button:disabled { cursor: not-allowed; opacity: .5; }
