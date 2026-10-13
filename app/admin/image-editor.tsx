@@ -11,8 +11,9 @@ export default function ImageEditor({ src, fileName, onApply, onCancel }: Props)
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const imageBoundsRef = useRef<Crop>({ x: 0, y: 0, width: STAGE_WIDTH, height: STAGE_HEIGHT });
-  const dragRef = useRef<{ x: number; y: number; crop: Crop; resize: boolean } | null>(null);
+  const dragRef = useRef<{ x: number; y: number; crop: Crop; handle: string } | null>(null);
   const [crop, setCrop] = useState<Crop | null>(null);
+  const [loadedSrc, setLoadedSrc] = useState("");
   const [rotation, setRotation] = useState(0);
   const [brightness, setBrightness] = useState(100);
   const [contrast, setContrast] = useState(100);
@@ -22,6 +23,7 @@ export default function ImageEditor({ src, fileName, onApply, onCancel }: Props)
     const image = new window.Image();
     image.onload = () => {
       imageRef.current = image;
+      setLoadedSrc(src);
       setCrop(null);
     };
     image.src = src;
@@ -31,7 +33,7 @@ export default function ImageEditor({ src, fileName, onApply, onCancel }: Props)
     const image = imageRef.current;
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d");
-    if (!image || !canvas || !context) return;
+    if (loadedSrc !== src || !image || !canvas || !context) return;
     const quarterTurn = Math.abs(rotation % 180) === 90;
     const rotatedWidth = quarterTurn ? image.naturalHeight : image.naturalWidth;
     const rotatedHeight = quarterTurn ? image.naturalWidth : image.naturalHeight;
@@ -52,23 +54,25 @@ export default function ImageEditor({ src, fileName, onApply, onCancel }: Props)
     context.drawImage(image, -image.naturalWidth * scale / 2, -image.naturalHeight * scale / 2, image.naturalWidth * scale, image.naturalHeight * scale);
     context.restore();
     if (!crop) {
-      const aspect = 5 / 7;
-      let cropWidth = width * 0.88;
-      let cropHeight = cropWidth / aspect;
-      if (cropHeight > height * 0.88) {
-        cropHeight = height * 0.88;
-        cropWidth = cropHeight * aspect;
-      }
+      const cropWidth = width * 0.9;
+      const cropHeight = height * 0.9;
       setCrop({ x: x + (width - cropWidth) / 2, y: y + (height - cropHeight) / 2, width: cropWidth, height: cropHeight });
     }
-  }, [src, rotation, brightness, contrast, saturation, crop]);
+  }, [src, loadedSrc, rotation, brightness, contrast, saturation, crop]);
 
   function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (!crop) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     const point = { x: (event.clientX - bounds.left) * (STAGE_WIDTH / bounds.width), y: (event.clientY - bounds.top) * (STAGE_HEIGHT / bounds.height) };
-    const resize = point.x >= crop.x + crop.width - 28 && point.y >= crop.y + crop.height - 28;
-    dragRef.current = { ...point, crop, resize };
+    const edge = 18;
+    const left = Math.abs(point.x - crop.x) <= edge;
+    const right = Math.abs(point.x - crop.x - crop.width) <= edge;
+    const top = Math.abs(point.y - crop.y) <= edge;
+    const bottom = Math.abs(point.y - crop.y - crop.height) <= edge;
+    const handle = `${left ? "w" : right ? "e" : ""}${top ? "n" : bottom ? "s" : ""}`;
+    const inside = point.x >= crop.x && point.x <= crop.x + crop.width && point.y >= crop.y && point.y <= crop.y + crop.height;
+    if (!handle && !inside) return;
+    dragRef.current = { ...point, crop, handle };
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
@@ -80,8 +84,17 @@ export default function ImageEditor({ src, fileName, onApply, onCancel }: Props)
     const dy = (event.clientY - bounds.top) * (STAGE_HEIGHT / bounds.height) - drag.y;
     const current = drag.crop;
     const imageBounds = imageBoundsRef.current;
-    if (drag.resize) setCrop({ ...current, width: Math.max(70, Math.min(current.width + dx, imageBounds.x + imageBounds.width - current.x)), height: Math.max(70, Math.min(current.height + dy, imageBounds.y + imageBounds.height - current.y)) });
-    else setCrop({ ...current, x: Math.max(imageBounds.x, Math.min(imageBounds.x + imageBounds.width - current.width, current.x + dx)), y: Math.max(imageBounds.y, Math.min(imageBounds.y + imageBounds.height - current.height, current.y + dy)) });
+    if (drag.handle) {
+      let left = current.x;
+      let right = current.x + current.width;
+      let top = current.y;
+      let bottom = current.y + current.height;
+      if (drag.handle.includes("w")) left = Math.max(imageBounds.x, Math.min(right - 70, current.x + dx));
+      if (drag.handle.includes("e")) right = Math.min(imageBounds.x + imageBounds.width, Math.max(left + 70, current.x + current.width + dx));
+      if (drag.handle.includes("n")) top = Math.max(imageBounds.y, Math.min(bottom - 70, current.y + dy));
+      if (drag.handle.includes("s")) bottom = Math.min(imageBounds.y + imageBounds.height, Math.max(top + 70, current.y + current.height + dy));
+      setCrop({ x: left, y: top, width: right - left, height: bottom - top });
+    } else setCrop({ ...current, x: Math.max(imageBounds.x, Math.min(imageBounds.x + imageBounds.width - current.width, current.x + dx)), y: Math.max(imageBounds.y, Math.min(imageBounds.y + imageBounds.height - current.height, current.y + dy)) });
   }
 
   async function apply() {
@@ -122,11 +135,12 @@ export default function ImageEditor({ src, fileName, onApply, onCancel }: Props)
     <section className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4" aria-label="Editor de imagen">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h3 className="text-sm font-medium text-white">Editar imagen</h3><p className="text-xs text-gray-400">Arrastra el marco para moverlo y su esquina inferior derecha para cambiar el recorte.</p></div>
-        <div className="flex gap-2"><button type="button" aria-label="Girar a la izquierda" onClick={() => setRotation((value) => (value - 90 + 360) % 360)} className="border border-zinc-700 px-3 py-2 text-sm hover:border-white">↶ 90°</button><button type="button" aria-label="Girar a la derecha" onClick={() => setRotation((value) => (value + 90) % 360)} className="border border-zinc-700 px-3 py-2 text-sm hover:border-white">↷ 90°</button></div>
+        <div className="flex gap-2"><button type="button" aria-label="Girar a la izquierda" onClick={() => { setCrop(null); setRotation((value) => (value - 90 + 360) % 360); }} className="border border-zinc-700 px-3 py-2 text-sm hover:border-white">↶ 90°</button><button type="button" aria-label="Girar a la derecha" onClick={() => { setCrop(null); setRotation((value) => (value + 90) % 360); }} className="border border-zinc-700 px-3 py-2 text-sm hover:border-white">↷ 90°</button></div>
       </div>
       <div className="relative mx-auto w-full max-w-2xl touch-none overflow-hidden bg-zinc-950" style={{ aspectRatio: `${STAGE_WIDTH}/${STAGE_HEIGHT}` }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={() => { dragRef.current = null; }} onPointerCancel={() => { dragRef.current = null; }}>
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-label="Vista previa para recortar" />
-        {crop && <div className="pointer-events-none absolute border-2 border-white shadow-[0_0_0_999px_rgb(0_0_0_0.48)]" style={{ left: `${(crop.x / STAGE_WIDTH) * 100}%`, top: `${(crop.y / STAGE_HEIGHT) * 100}%`, width: `${(crop.width / STAGE_WIDTH) * 100}%`, height: `${(crop.height / STAGE_HEIGHT) * 100}%` }}><span className="absolute -bottom-2 -right-2 h-5 w-5 rounded-sm border-2 border-white bg-red-500" /></div>}
+        {loadedSrc !== src && <span className="absolute inset-0 grid place-items-center text-sm text-gray-400">Cargando imagen…</span>}
+        {crop && <div className="pointer-events-none absolute border-2 border-white shadow-[0_0_0_999px_rgb(0_0_0_0.48)]" style={{ left: `${(crop.x / STAGE_WIDTH) * 100}%`, top: `${(crop.y / STAGE_HEIGHT) * 100}%`, width: `${(crop.width / STAGE_WIDTH) * 100}%`, height: `${(crop.height / STAGE_HEIGHT) * 100}%` }}><span className="absolute -left-1.5 -top-1.5 h-3 w-3 rounded-full border border-white bg-red-500" /><span className="absolute -right-1.5 -top-1.5 h-3 w-3 rounded-full border border-white bg-red-500" /><span className="absolute -bottom-1.5 -left-1.5 h-3 w-3 rounded-full border border-white bg-red-500" /><span className="absolute -bottom-1.5 -right-1.5 h-3 w-3 rounded-full border border-white bg-red-500" /><span className="absolute left-1/3 top-0 h-full border-l border-white/40" /><span className="absolute left-2/3 top-0 h-full border-l border-white/40" /><span className="absolute left-0 top-1/3 w-full border-t border-white/40" /><span className="absolute left-0 top-2/3 w-full border-t border-white/40" /></div>}
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         {([["Brillo", brightness, setBrightness], ["Contraste", contrast, setContrast], ["Saturación", saturation, setSaturation]] as const).map(([label, value, setValue]) => <label key={label} className="space-y-1 text-xs text-gray-300"><span className="flex justify-between"><span>{label}</span><span>{value}%</span></span><input aria-label={label} type="range" min="50" max="150" value={value} onChange={(event) => setValue(Number(event.target.value))} className="w-full accent-red-500" /></label>)}
