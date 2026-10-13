@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import {
   collection,
   addDoc,
@@ -59,8 +60,8 @@ export default function AdminPage() {
 
   const [titulo, setTitulo] = useState("");
   const [tecnica, setTecnica] = useState("");
-  const [ancho, setAncho] = useState(20);
-  const [alto, setAlto] = useState(20);
+  const [ancho, setAncho] = useState(50);
+  const [alto, setAlto] = useState(70);
   const [unidad, setUnidad] = useState("cm");
   const [anio, setAnio] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -71,6 +72,11 @@ export default function AdminPage() {
   const [imagen, setImagen] = useState<File | null>(null);
   const [audio, setAudio] = useState<File | null>(null);
   const [vistaPreviaObra, setVistaPreviaObra] = useState("");
+  const vistaPreviaObraUrl = useRef("");
+  const [zoomRecorte, setZoomRecorte] = useState(1);
+  const [posicionXRecorte, setPosicionXRecorte] = useState(50);
+  const [posicionYRecorte, setPosicionYRecorte] = useState(50);
+  const [aplicandoRecorte, setAplicandoRecorte] = useState(false);
   const [analisisIAActivo, setAnalisisIAActivo] = useState(false);
   const [analizandoImagen, setAnalizandoImagen] = useState(false);
 
@@ -96,8 +102,23 @@ export default function AdminPage() {
   const [fotoArtistaUrl, setFotoArtistaUrl] = useState("");
   const [fotoArtista, setFotoArtista] = useState<File | null>(null);
   const [vistaPreviaFoto, setVistaPreviaFoto] = useState("");
+  const vistaPreviaFotoUrl = useRef("");
   const [redes, setRedes] = useState<RedSocial[]>([{ nombre: "Instagram", url: "" }]);
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
+
+  function cambiarImagen(archivo: File | null) {
+    if (vistaPreviaObraUrl.current) URL.revokeObjectURL(vistaPreviaObraUrl.current);
+    vistaPreviaObraUrl.current = archivo ? URL.createObjectURL(archivo) : "";
+    setImagen(archivo);
+    setVistaPreviaObra(vistaPreviaObraUrl.current);
+  }
+
+  function cambiarFotoArtista(archivo: File | null) {
+    if (vistaPreviaFotoUrl.current) URL.revokeObjectURL(vistaPreviaFotoUrl.current);
+    vistaPreviaFotoUrl.current = archivo ? URL.createObjectURL(archivo) : "";
+    setFotoArtista(archivo);
+    setVistaPreviaFoto(vistaPreviaFotoUrl.current);
+  }
 
   useEffect(() => {
     const cancelar = onAuthStateChanged(auth, (usuarioActual) => {
@@ -108,19 +129,10 @@ export default function AdminPage() {
     return () => cancelar();
   }, []);
 
-  useEffect(() => {
-    if (!fotoArtista) { setVistaPreviaFoto(""); return; }
-    const urlTemporal = URL.createObjectURL(fotoArtista);
-    setVistaPreviaFoto(urlTemporal);
-    return () => URL.revokeObjectURL(urlTemporal);
-  }, [fotoArtista]);
-
-  useEffect(() => {
-    if (!imagen) { setVistaPreviaObra(""); return; }
-    const urlTemporal = URL.createObjectURL(imagen);
-    setVistaPreviaObra(urlTemporal);
-    return () => URL.revokeObjectURL(urlTemporal);
-  }, [imagen]);
+  useEffect(() => () => {
+    if (vistaPreviaFotoUrl.current) URL.revokeObjectURL(vistaPreviaFotoUrl.current);
+    if (vistaPreviaObraUrl.current) URL.revokeObjectURL(vistaPreviaObraUrl.current);
+  }, []);
 
   useEffect(() => {
     async function cargarPerfil() {
@@ -148,7 +160,7 @@ export default function AdminPage() {
       const fotoUrl = fotoArtista ? await subirArchivo(fotoArtista, "image") : fotoArtistaUrl;
       await setDoc(artistDoc, { nombre: artistaNombre, biografia: artistaBio, whatsapp: artistaWhatsApp, fotoUrl, redes: redes.filter((red) => red.nombre.trim() && red.url.trim()) }, { merge: true });
       setFotoArtistaUrl(fotoUrl);
-      setFotoArtista(null);
+      cambiarFotoArtista(null);
       setMensaje("Ficha del artista actualizada correctamente.");
     } catch (error) {
       console.error(error);
@@ -336,6 +348,46 @@ export default function AdminPage() {
     return datos.secure_url;
   }
 
+  async function aplicarRecorte() {
+    if (!imagen) return;
+    setAplicandoRecorte(true);
+    const urlTemporal = URL.createObjectURL(imagen);
+    try {
+      const imagenOriginal = new window.Image();
+      await new Promise<void>((resolve, reject) => {
+        imagenOriginal.onload = () => resolve();
+        imagenOriginal.onerror = () => reject(new Error("No se pudo cargar la imagen."));
+        imagenOriginal.src = urlTemporal;
+      });
+
+      const relacion = 5 / 7;
+      let anchoFuente = imagenOriginal.naturalWidth;
+      let altoFuente = imagenOriginal.naturalHeight;
+      if (anchoFuente / altoFuente > relacion) anchoFuente = altoFuente * relacion;
+      else altoFuente = anchoFuente / relacion;
+      anchoFuente /= zoomRecorte;
+      altoFuente /= zoomRecorte;
+      const x = (imagenOriginal.naturalWidth - anchoFuente) * posicionXRecorte / 100;
+      const y = (imagenOriginal.naturalHeight - altoFuente) * posicionYRecorte / 100;
+      const canvas = document.createElement("canvas");
+      canvas.width = 1000;
+      canvas.height = 1400;
+      const contexto = canvas.getContext("2d");
+      if (!contexto) throw new Error("No se pudo preparar el recorte.");
+      contexto.drawImage(imagenOriginal, x, y, anchoFuente, altoFuente, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((resultado) => resultado ? resolve(resultado) : reject(new Error("No se pudo guardar el recorte.")), "image/jpeg", 0.92));
+      cambiarImagen(new File([blob], imagen.name.replace(/\.[^.]+$/, "") + "-recortada.jpg", { type: "image/jpeg" }));
+      setZoomRecorte(1);
+      setPosicionXRecorte(50);
+      setPosicionYRecorte(50);
+    } catch (error) {
+      setMensaje(error instanceof Error ? error.message : "No se pudo recortar la imagen.");
+    } finally {
+      URL.revokeObjectURL(urlTemporal);
+      setAplicandoRecorte(false);
+    }
+  }
+
   async function guardarObra() {
     if (!titulo || !tecnica) {
       setMensaje("Completa al menos el título y la técnica.");
@@ -377,15 +429,15 @@ export default function AdminPage() {
 
       setTitulo("");
       setTecnica("");
-      setAncho(20);
-      setAlto(20);
+      setAncho(50);
+      setAlto(70);
       setUnidad("cm");
       setAnio("");
       setDescripcion("");
       setCategoria("Pintura");
       setPrecio("");
       setDisponible(true);
-      setImagen(null);
+      cambiarImagen(null);
       setAudio(null);
       setAnalisisIAActivo(false);
 
@@ -575,10 +627,10 @@ export default function AdminPage() {
             <div>
               <label className="mb-3 block text-sm text-gray-400">Fotografía del artista</label>
               <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-                <div className="grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-900 text-xs text-gray-500">
-                  {(vistaPreviaFoto || fotoArtistaUrl) ? <img src={vistaPreviaFoto || fotoArtistaUrl} alt="Vista previa del artista" className="h-full w-full object-cover" /> : "Sin foto"}
+                <div className="relative grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-900 text-xs text-gray-500">
+                  {(vistaPreviaFoto || fotoArtistaUrl) ? <Image src={vistaPreviaFoto || fotoArtistaUrl} alt="Vista previa del artista" fill sizes="112px" unoptimized={Boolean(vistaPreviaFoto)} className="object-cover" /> : "Sin foto"}
                 </div>
-                <div className="space-y-2"><input type="file" accept="image/*" onChange={(event) => setFotoArtista(event.target.files?.[0] || null)} className="w-full text-sm text-gray-400" /><p className="text-xs text-gray-500">La foto se mostrará en la ficha pública del artista.</p>{fotoArtista && <button type="button" onClick={() => setFotoArtista(null)} className="text-xs text-gray-400 underline">Cancelar reemplazo</button>}</div>
+                <div className="space-y-2"><input type="file" accept="image/*" onChange={(event) => cambiarFotoArtista(event.target.files?.[0] || null)} className="w-full text-sm text-gray-400" /><p className="text-xs text-gray-500">La foto se mostrará en la ficha pública del artista.</p>{fotoArtista && <button type="button" onClick={() => cambiarFotoArtista(null)} className="text-xs text-gray-400 underline">Cancelar reemplazo</button>}</div>
               </div>
             </div>
             <div><label className="mb-2 block text-sm text-gray-400">Información sobre el artista</label><textarea value={artistaBio} onChange={(event) => setArtistaBio(event.target.value)} rows={6} maxLength={3000} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3" placeholder="Trayectoria, inspiración, técnicas, exposiciones..." /></div>
@@ -610,8 +662,8 @@ export default function AdminPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="admin-upload-card admin-image-upload">
-                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setImagen(e.target.files?.[0] || null)} className="sr-only" />
-                {vistaPreviaObra ? <img src={vistaPreviaObra} alt="Vista previa de la obra" className="admin-upload-preview" /> : <span className="admin-upload-icon" aria-hidden="true">＋</span>}
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => { cambiarImagen(e.target.files?.[0] || null); setZoomRecorte(1); setPosicionXRecorte(50); setPosicionYRecorte(50); }} className="sr-only" />
+                {vistaPreviaObra ? <Image src={vistaPreviaObra} alt="Vista previa de la obra" width={56} height={56} unoptimized className="admin-upload-preview" /> : <span className="admin-upload-icon" aria-hidden="true">＋</span>}
                 <span className="admin-upload-copy"><strong>{imagen ? "Cambiar imagen" : "Agregar imagen"}</strong><small>{imagen ? imagen.name : "JPG, PNG o WEBP · Requerida"}</small></span>
               </label>
               <label className="admin-upload-card admin-audio-upload">
@@ -620,6 +672,15 @@ export default function AdminPage() {
                 <span className="admin-upload-copy"><strong>{audio ? "Cambiar audio" : "Agregar audio"}</strong><small>{audio ? audio.name : "MP3 u otro formato · Opcional"}</small></span>
               </label>
             </div>
+            {imagen && vistaPreviaObra && <div className="grid gap-5 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="space-y-2"><p className="text-sm text-gray-300">Ajustar recorte (proporción 5:7)</p><div className="relative mx-auto aspect-[5/7] h-72 w-auto overflow-hidden bg-black"><Image src={vistaPreviaObra} alt="Vista previa del recorte" fill unoptimized sizes="208px" className="object-cover" style={{ objectPosition: `${posicionXRecorte}% ${posicionYRecorte}%`, transform: `scale(${zoomRecorte})` }} /></div></div>
+              <div className="space-y-4 self-center">
+                <label className="dimension-slider"><span><span>Zoom</span><strong>{zoomRecorte.toFixed(1)}×</strong></span><input type="range" min="1" max="3" step="0.1" value={zoomRecorte} onChange={(e) => setZoomRecorte(Number(e.target.value))} /></label>
+                <label className="dimension-slider"><span><span>Posición horizontal</span><strong>{posicionXRecorte}%</strong></span><input type="range" min="0" max="100" value={posicionXRecorte} onChange={(e) => setPosicionXRecorte(Number(e.target.value))} /></label>
+                <label className="dimension-slider"><span><span>Posición vertical</span><strong>{posicionYRecorte}%</strong></span><input type="range" min="0" max="100" value={posicionYRecorte} onChange={(e) => setPosicionYRecorte(Number(e.target.value))} /></label>
+                <button type="button" onClick={aplicarRecorte} disabled={aplicandoRecorte} className="border border-zinc-600 px-4 py-2 text-sm text-white hover:border-red-500 disabled:opacity-50">{aplicandoRecorte ? "APLICANDO..." : "APLICAR RECORTE"}</button>
+              </div>
+            </div>}
 
             <div>
               <label className="block text-sm text-gray-400 mb-2">
@@ -657,7 +718,7 @@ export default function AdminPage() {
               </label>
 
               <div className="grid gap-5 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 sm:grid-cols-2">
-                {[["Ancho", ancho, setAncho], ["Alto", alto, setAlto]].map(([etiqueta, valor, actualizar]) => <label key={String(etiqueta)} className="dimension-slider"><span><span>{String(etiqueta)}</span><strong>{String(valor)} {unidad}</strong></span><input type="range" min="20" max="170" step="5" value={Number(valor)} onChange={(e) => (actualizar as (n: number) => void)(Number(e.target.value))} /><small>20–170, en intervalos de 5</small></label>)}
+                {[["Ancho", ancho, setAncho], ["Alto", alto, setAlto]].map(([etiqueta, valor, actualizar]) => <label key={String(etiqueta)} className="dimension-slider"><span><span>{String(etiqueta)}</span><strong>{String(valor)} {unidad}</strong></span><input type="range" min="5" max="170" step="5" value={Number(valor)} onChange={(e) => (actualizar as (n: number) => void)(Number(e.target.value))} /><small>5–170, en intervalos de 5</small></label>)}
                 <label className="sm:col-span-2"><span className="mb-2 block text-sm text-gray-400">Unidad de medida</span><select value={unidad} onChange={(e) => setUnidad(e.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3 text-white"><option value="cm">Centímetros (cm)</option><option value="mm">Milímetros (mm)</option><option value="in">Pulgadas (in)</option></select></label>
               </div>
             </div>
@@ -673,7 +734,7 @@ export default function AdminPage() {
             <div>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <label htmlFor="descripcion-obra" className="block text-sm text-gray-400">Descripción</label>
-                <label className="ai-toggle"><input type="checkbox" checked={analisisIAActivo} onChange={(e) => setAnalisisIAActivo(e.target.checked)} /><span>✦</span> Sugerir análisis con IA</label>
+                {process.env.NEXT_PUBLIC_ENABLE_AI_ANALYSIS === "true" && <label className="ai-toggle"><input type="checkbox" checked={analisisIAActivo} onChange={(e) => setAnalisisIAActivo(e.target.checked)} /><span>✦</span> Sugerir análisis con IA</label>}
               </div>
               {analisisIAActivo && <div className="ai-analysis-card mb-3"><p>OpenAI propondrá una lectura formal y conceptual a partir de la imagen. Podrás editar el texto antes de guardar. Cada análisis puede generar cargos de API.</p><button type="button" onClick={analizarImagenConIA} disabled={analizandoImagen || !imagen} className="ai-analysis-button">{analizandoImagen ? "Analizando imagen…" : "✦ Analizar imagen y redactar"}</button></div>}
               <textarea
@@ -737,9 +798,11 @@ export default function AdminPage() {
                   className="border border-zinc-800 p-4 flex flex-col md:flex-row gap-5"
                 >
 
-                  <img
+                  <Image
                     src={obra.imagenUrl}
                     alt={obra.titulo}
+                    width={128}
+                    height={160}
                     className="w-full md:w-32 h-40 object-cover"
                   />
 

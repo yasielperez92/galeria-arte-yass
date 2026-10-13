@@ -1,44 +1,28 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Estudio de Arte Yass
 
-## Getting Started
+Galería pública y panel de administración construidos con Next.js, Firebase y Cloudinary.
 
-First, run the development server:
+## Desarrollo local
 
 ```bash
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abre `http://localhost:3000`.
 
-## Análisis de obras con IA
+## Variables de entorno
 
-La acción de análisis visual usa la API de OpenAI desde un Route Handler de Next.js. Copia `.env.example` a `.env.local` y coloca una clave de API válida en `OPENAI_API_KEY`. Crea la clave en [la plataforma API de OpenAI](https://platform.openai.com/api-keys). La clave se usa solo en el servidor y no debe añadirse al navegador ni al repositorio. El modelo predeterminado es `gpt-4.1-mini`; puedes cambiarlo con `OPENAI_VISION_MODEL`.
+Copia `.env.example` a `.env.local`. Configura `OPENAI_API_KEY` solo si se usará el análisis de imágenes con IA, establece `ADMIN_FIREBASE_UID` con el UID de la cuenta administradora de Firebase y cambia `NEXT_PUBLIC_SITE_URL` por el dominio público al publicar. `NEXT_PUBLIC_ENABLE_AI_ANALYSIS` permanece en `false` hasta configurar la clave y el UID. Nunca añadas claves privadas al código ni al repositorio.
 
-La API se factura por separado de la suscripción a ChatGPT; cada análisis puede generar cargos según el uso.
+El análisis de imágenes requiere `OPENAI_API_KEY` y puede generar cargos de API. La ruta también exige una sesión válida de Firebase perteneciente al UID administrador.
 
-Esta app requiere un host que ejecute Next.js para procesar `/api/analizar-obra`; no despliegues solo la carpeta `out` como sitio estático.
+## Seguridad de Firebase
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Antes de publicar, despliega `firestore.rules` en Firebase Console o con Firebase CLI. Las reglas dejan la lectura pública de obras y del perfil, y permiten cambios únicamente a la cuenta cuyo UID se configura como administrador. No uses reglas abiertas en producción.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Publicación
 
-## Learn More
+La aplicación necesita un host de Next.js (por ejemplo, Vercel); no publiques `out` como sitio estático porque el análisis de imágenes usa una ruta de servidor. Conecta el repositorio a Vercel y configura `ADMIN_FIREBASE_UID`, `NEXT_PUBLIC_SITE_URL`, `OPENAI_API_KEY` y `OPENAI_VISION_MODEL` en las variables de entorno del proyecto. Activa `NEXT_PUBLIC_ENABLE_AI_ANALYSIS=true` solo después de configurar la clave de OpenAI; la clave es opcional si el análisis permanece desactivado.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+El workflow de GitHub Actions ejecuta ESLint y la compilación de producción para cambios en `main` y pull requests.

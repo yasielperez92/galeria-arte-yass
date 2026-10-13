@@ -72,7 +72,7 @@ body { background: #080909; }
 .site-header nav a { color: #e8e8e8; transition: color .2s; }
 .site-header nav a:hover, .admin-link:hover { color: var(--yass-red); }
 .admin-link { display: inline-flex; align-items: center; gap: .45rem; font-size: .72rem; color: #eee; }
-.hero-art { isolation: isolate; background: #080909 url('/obras/obra1.jpg') center 45% / cover no-repeat; }
+.hero-art { isolation: isolate; background: #080909 url('/obras/obra1.webp') center 45% / cover no-repeat; }
 .hero-art::before { content: ''; position: absolute; z-index: -1; inset: 0; background: linear-gradient(90deg,#050606 0%,rgb(5 6 6 / 96%) 23%,rgb(5 6 6 / 78%) 42%,rgb(5 6 6 / 15%) 74%,rgb(5 6 6 / 15%) 100%),linear-gradient(0deg,rgb(0 0 0 / 34%),transparent 44%); }
 .hero-art::after { display: none; }
 .hero-copy { width: min(100%, 31rem); border-left: 5px solid var(--yass-red); padding-left: 1.5rem; }

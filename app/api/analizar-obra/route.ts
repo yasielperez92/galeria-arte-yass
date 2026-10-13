@@ -25,6 +25,15 @@ export async function POST(request: Request) {
     );
     if (!verificacion.ok) return Response.json({ error: "Tu sesión venció. Vuelve a iniciar sesión." }, { status: 401 });
 
+    const uidAdministrador = process.env.ADMIN_FIREBASE_UID;
+    if (!uidAdministrador) {
+      return Response.json({ error: "El administrador del servicio aún no está configurado." }, { status: 503 });
+    }
+    const cuenta = await verificacion.json() as { users?: { localId?: string }[] };
+    if (cuenta.users?.[0]?.localId !== uidAdministrador) {
+      return Response.json({ error: "No tienes permiso para analizar obras." }, { status: 403 });
+    }
+
     if (!process.env.OPENAI_API_KEY) {
       return Response.json({ error: "Falta configurar OPENAI_API_KEY en el servidor." }, { status: 503 });
     }

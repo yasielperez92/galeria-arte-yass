@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { collection, doc, getDoc, getDocs, getFirestore } from "firebase/firestore";
 import app from "../firebase";
 
@@ -73,7 +74,7 @@ export default function Home() {
     async function cargarObras() {
       try {
         const consulta = await getDocs(collection(db, "obras"));
-        setObras(consulta.docs.map((documento) => {
+        const obrasCargadas = consulta.docs.map((documento) => {
           const datos = documento.data();
           return {
             id: documento.id, titulo: datos.titulo || "", tecnica: datos.tecnica || "",
@@ -81,7 +82,11 @@ export default function Home() {
             imagenUrl: datos.imagenUrl || "", audioUrl: datos.audioUrl || "", categoria: datos.categoria || "Pintura",
             precio: datos.precio || "", disponible: datos.disponible ?? true,
           };
-        }));
+        });
+        setObras(obrasCargadas);
+        const idCompartido = window.location.hash.startsWith("#obra=") ? window.location.hash.slice(6) : "";
+        const obraCompartida = obrasCargadas.find((obra) => obra.id === idCompartido);
+        if (obraCompartida) setObraSeleccionada(obraCompartida);
       } catch (error) { console.error("Error cargando las obras:", error); }
       finally { setCargando(false); }
     }
@@ -105,14 +110,6 @@ export default function Home() {
     }
     cargarPerfil();
   }, []);
-
-  useEffect(() => {
-    const idCompartido = window.location.hash.startsWith("#obra=") ? window.location.hash.slice(6) : "";
-    if (idCompartido && obras.length) {
-      const compartida = obras.find((obra) => obra.id === idCompartido);
-      if (compartida) setObraSeleccionada(compartida);
-    }
-  }, [obras]);
 
   useEffect(() => {
     if (!filtrosAbiertos) return;
@@ -209,7 +206,7 @@ export default function Home() {
               {obrasFiltradas.map((obra, indice) => <article key={obra.id} className="art-card group animate-reveal transition-all duration-500" style={{ animationDelay: `${Math.min(indice, 8) * 70}ms` }}>
                 <button onClick={() => setObraSeleccionada(obra)} className="block w-full text-left" aria-label={`Ver ${obra.titulo}`}>
                   <div className="relative aspect-[1.12/1] overflow-hidden bg-[#211e1a]">
-                    {obra.imagenUrl && <img src={obra.imagenUrl} alt={obra.titulo} loading="lazy" className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.035]" />}
+                    {obra.imagenUrl && <Image src={obra.imagenUrl} alt={obra.titulo} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" loading="lazy" className="object-cover transition duration-700 group-hover:scale-[1.035]" />}
                     <span className="absolute left-4 top-4 rounded-full bg-[#11100f]/75 px-3 py-2 text-[10px] uppercase tracking-[0.16em] backdrop-blur">{obra.categoria}</span>
                     <span className={`absolute right-4 top-4 rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.12em] ${obra.disponible ? "bg-[#e9e1d5] text-[#28231e]" : "bg-[#37332f] text-[#d2c8bb]"}`}>{obra.disponible ? "Disponible" : "Vendida"}</span>
                   </div>
@@ -228,7 +225,7 @@ export default function Home() {
       </section>
 
       <section id="artista" className="scroll-mt-8 border-y border-[#312d28] bg-[#191714] px-6 py-20 sm:py-28 md:px-16">
-        <div className="mx-auto flex max-w-4xl flex-col gap-7 sm:flex-row sm:items-start sm:gap-10">{fotoArtistaUrl && <img src={fotoArtistaUrl} alt={`Retrato de ${perfil.nombre}`} loading="lazy" className="h-36 w-36 shrink-0 rounded-full border border-[#484139] object-cover sm:h-44 sm:w-44" />}<div><p className="eyebrow">EL ARTISTA</p><h2 className="display-title mt-4 text-4xl font-light sm:text-6xl">{perfil.nombre}</h2>{perfil.biografia && <p className="mt-7 max-w-2xl whitespace-pre-line font-serif text-lg leading-relaxed text-[#b9b0a5] sm:text-xl">{perfil.biografia}</p>}<div className="mt-8 flex flex-wrap gap-3">{perfil.redes.filter((red) => red.url?.trim()).map((red, indice) => <a key={`${red.nombre}-${indice}`} href={red.url} target="_blank" rel="noreferrer" aria-label={red.nombre} title={red.nombre} className="grid h-12 w-12 place-items-center border border-[#484139] text-[#d6c6ae] transition hover:border-[#bf775f] hover:bg-[#bf775f]/10 hover:text-white"><IconoRed nombre={red.nombre} /></a>)}</div></div></div>
+        <div className="mx-auto flex max-w-4xl flex-col gap-7 sm:flex-row sm:items-start sm:gap-10">{fotoArtistaUrl && <Image src={fotoArtistaUrl} alt={`Retrato de ${perfil.nombre}`} width={176} height={176} sizes="(max-width: 640px) 144px, 176px" loading="lazy" className="h-36 w-36 shrink-0 rounded-full border border-[#484139] object-cover sm:h-44 sm:w-44" />}<div><p className="eyebrow">EL ARTISTA</p><h2 className="display-title mt-4 text-4xl font-light sm:text-6xl">{perfil.nombre}</h2>{perfil.biografia && <p className="mt-7 max-w-2xl whitespace-pre-line font-serif text-lg leading-relaxed text-[#b9b0a5] sm:text-xl">{perfil.biografia}</p>}<div className="mt-8 flex flex-wrap gap-3">{perfil.redes.filter((red) => red.url?.trim()).map((red, indice) => <a key={`${red.nombre}-${indice}`} href={red.url} target="_blank" rel="noreferrer" aria-label={red.nombre} title={red.nombre} className="grid h-12 w-12 place-items-center border border-[#484139] text-[#d6c6ae] transition hover:border-[#bf775f] hover:bg-[#bf775f]/10 hover:text-white"><IconoRed nombre={red.nombre} /></a>)}</div></div></div>
       </section>
 
       {obraSeleccionada && <div className="fixed inset-0 z-50 overflow-y-auto bg-[#100f0e]/90 backdrop-blur-md" onClick={() => setObraSeleccionada(null)}>
@@ -236,7 +233,7 @@ export default function Home() {
           <div className="my-auto w-full max-w-6xl animate-reveal">
             <div className="mb-3 flex justify-end"><button onClick={() => setObraSeleccionada(null)} aria-label="Cerrar" className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 text-3xl text-[#b9b0a5] transition-colors hover:border-white/30 hover:text-white">×</button></div>
             <div className="grid items-center gap-7 md:grid-cols-2 md:gap-12" style={{ touchAction: "pan-y" }} onTouchStart={(event) => { inicioToque.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={(event) => { if (inicioToque.current !== null) { const delta = event.changedTouches[0].clientX - inicioToque.current; if (Math.abs(delta) > 48) cambiarObra(delta < 0 ? 1 : -1); } inicioToque.current = null; }}>
-              <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-[#201d19]"><img src={obraSeleccionada.imagenUrl} alt={obraSeleccionada.titulo} className="max-h-[58vh] w-full object-contain md:max-h-[78vh]" />{obras.length > 1 && <><button onClick={() => cambiarObra(-1)} aria-label="Obra anterior" className="absolute left-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">‹</button><button onClick={() => cambiarObra(1)} aria-label="Obra siguiente" className="absolute right-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">›</button></>}</div>
+              <div className="relative h-[58vh] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#201d19] md:h-[78vh]"><Image src={obraSeleccionada.imagenUrl} alt={obraSeleccionada.titulo} fill sizes="(max-width: 768px) 100vw, 50vw" className="object-contain" />{obras.length > 1 && <><button onClick={() => cambiarObra(-1)} aria-label="Obra anterior" className="absolute left-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">‹</button><button onClick={() => cambiarObra(1)} aria-label="Obra siguiente" className="absolute right-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">›</button></>}</div>
               <div className="pb-8">
                 <p className="eyebrow">{obraSeleccionada.categoria} · {obraSeleccionada.disponible ? "DISPONIBLE" : "VENDIDA"}</p>
                 <h2 className="display-title mt-4 text-4xl font-light leading-tight sm:text-6xl">{obraSeleccionada.titulo}</h2>
