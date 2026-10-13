@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import ImageEditor from "./image-editor";
 import {
   collection,
   addDoc,
@@ -73,10 +74,7 @@ export default function AdminPage() {
   const [audio, setAudio] = useState<File | null>(null);
   const [vistaPreviaObra, setVistaPreviaObra] = useState("");
   const vistaPreviaObraUrl = useRef("");
-  const [zoomRecorte, setZoomRecorte] = useState(1);
-  const [posicionXRecorte, setPosicionXRecorte] = useState(50);
-  const [posicionYRecorte, setPosicionYRecorte] = useState(50);
-  const [aplicandoRecorte, setAplicandoRecorte] = useState(false);
+  const [editorAbierto, setEditorAbierto] = useState(false);
   const [analisisIAActivo, setAnalisisIAActivo] = useState(false);
   const [analizandoImagen, setAnalizandoImagen] = useState(false);
 
@@ -346,46 +344,6 @@ export default function AdminPage() {
     const datos = await respuesta.json();
 
     return datos.secure_url;
-  }
-
-  async function aplicarRecorte() {
-    if (!imagen) return;
-    setAplicandoRecorte(true);
-    const urlTemporal = URL.createObjectURL(imagen);
-    try {
-      const imagenOriginal = new window.Image();
-      await new Promise<void>((resolve, reject) => {
-        imagenOriginal.onload = () => resolve();
-        imagenOriginal.onerror = () => reject(new Error("No se pudo cargar la imagen."));
-        imagenOriginal.src = urlTemporal;
-      });
-
-      const relacion = 5 / 7;
-      let anchoFuente = imagenOriginal.naturalWidth;
-      let altoFuente = imagenOriginal.naturalHeight;
-      if (anchoFuente / altoFuente > relacion) anchoFuente = altoFuente * relacion;
-      else altoFuente = anchoFuente / relacion;
-      anchoFuente /= zoomRecorte;
-      altoFuente /= zoomRecorte;
-      const x = (imagenOriginal.naturalWidth - anchoFuente) * posicionXRecorte / 100;
-      const y = (imagenOriginal.naturalHeight - altoFuente) * posicionYRecorte / 100;
-      const canvas = document.createElement("canvas");
-      canvas.width = 1000;
-      canvas.height = 1400;
-      const contexto = canvas.getContext("2d");
-      if (!contexto) throw new Error("No se pudo preparar el recorte.");
-      contexto.drawImage(imagenOriginal, x, y, anchoFuente, altoFuente, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((resultado) => resultado ? resolve(resultado) : reject(new Error("No se pudo guardar el recorte.")), "image/jpeg", 0.92));
-      cambiarImagen(new File([blob], imagen.name.replace(/\.[^.]+$/, "") + "-recortada.jpg", { type: "image/jpeg" }));
-      setZoomRecorte(1);
-      setPosicionXRecorte(50);
-      setPosicionYRecorte(50);
-    } catch (error) {
-      setMensaje(error instanceof Error ? error.message : "No se pudo recortar la imagen.");
-    } finally {
-      URL.revokeObjectURL(urlTemporal);
-      setAplicandoRecorte(false);
-    }
   }
 
   async function guardarObra() {
@@ -662,7 +620,7 @@ export default function AdminPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="admin-upload-card admin-image-upload">
-                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => { cambiarImagen(e.target.files?.[0] || null); setZoomRecorte(1); setPosicionXRecorte(50); setPosicionYRecorte(50); }} className="sr-only" />
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => { const archivo = e.target.files?.[0] || null; cambiarImagen(archivo); setEditorAbierto(Boolean(archivo)); }} className="sr-only" />
                 {vistaPreviaObra ? <Image src={vistaPreviaObra} alt="Vista previa de la obra" width={56} height={56} unoptimized className="admin-upload-preview" /> : <span className="admin-upload-icon" aria-hidden="true">＋</span>}
                 <span className="admin-upload-copy"><strong>{imagen ? "Cambiar imagen" : "Agregar imagen"}</strong><small>{imagen ? imagen.name : "JPG, PNG o WEBP · Requerida"}</small></span>
               </label>
@@ -672,15 +630,9 @@ export default function AdminPage() {
                 <span className="admin-upload-copy"><strong>{audio ? "Cambiar audio" : "Agregar audio"}</strong><small>{audio ? audio.name : "MP3 u otro formato · Opcional"}</small></span>
               </label>
             </div>
-            {imagen && vistaPreviaObra && <div className="grid gap-5 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="space-y-2"><p className="text-sm text-gray-300">Ajustar recorte (proporción 5:7)</p><div className="relative mx-auto aspect-[5/7] h-72 w-auto overflow-hidden bg-black"><Image src={vistaPreviaObra} alt="Vista previa del recorte" fill unoptimized sizes="208px" className="object-cover" style={{ objectPosition: `${posicionXRecorte}% ${posicionYRecorte}%`, transform: `scale(${zoomRecorte})` }} /></div></div>
-              <div className="space-y-4 self-center">
-                <label className="dimension-slider"><span><span>Zoom</span><strong>{zoomRecorte.toFixed(1)}×</strong></span><input type="range" min="1" max="3" step="0.1" value={zoomRecorte} onChange={(e) => setZoomRecorte(Number(e.target.value))} /></label>
-                <label className="dimension-slider"><span><span>Posición horizontal</span><strong>{posicionXRecorte}%</strong></span><input type="range" min="0" max="100" value={posicionXRecorte} onChange={(e) => setPosicionXRecorte(Number(e.target.value))} /></label>
-                <label className="dimension-slider"><span><span>Posición vertical</span><strong>{posicionYRecorte}%</strong></span><input type="range" min="0" max="100" value={posicionYRecorte} onChange={(e) => setPosicionYRecorte(Number(e.target.value))} /></label>
-                <button type="button" onClick={aplicarRecorte} disabled={aplicandoRecorte} className="border border-zinc-600 px-4 py-2 text-sm text-white hover:border-red-500 disabled:opacity-50">{aplicandoRecorte ? "APLICANDO..." : "APLICAR RECORTE"}</button>
-              </div>
-            </div>}
+            {imagen && vistaPreviaObra && (editorAbierto
+              ? <ImageEditor src={vistaPreviaObra} fileName={imagen.name} onApply={(archivo) => { cambiarImagen(archivo); setEditorAbierto(false); }} onCancel={() => setEditorAbierto(false)} />
+              : <button type="button" onClick={() => setEditorAbierto(true)} className="border border-zinc-700 px-4 py-2 text-sm text-white hover:border-red-500">Editar imagen</button>)}
 
             <div>
               <label className="block text-sm text-gray-400 mb-2">
