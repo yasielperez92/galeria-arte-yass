@@ -6,14 +6,26 @@ import { collection, doc, getDoc, getDocs, getFirestore } from "firebase/firesto
 import app from "../firebase";
 
 const db = getFirestore(app);
-const categorias = ["Todas", "Pintura", "Grabado", "Ilustración", "Escultura"];
-
+const claveColeccionesLocales = "galeria-yass-colecciones";
+function leerColeccionesLocales(): string[] {
+  try { return JSON.parse(window.localStorage.getItem(claveColeccionesLocales) || "[]") as string[]; }
+  catch { return []; }
+}
 type Obra = {
   id: string; titulo: string; tecnica: string; dimensiones: string; anio: string;
-  descripcion: string; imagenUrl: string; audioUrl: string; categoria: string;
+  descripcion: string; imagenUrl: string; audioUrl: string; colecciones: string[];
   precio: string; disponible: boolean;
 };
 type PerfilArtista = { nombre: string; biografia: string; whatsapp: string; redes: { nombre: string; url: string }[] };
+
+function obtenerColecciones(datos: { colecciones?: unknown; categoria?: unknown; categorias?: unknown }): string[] {
+  const guardadas = Array.isArray(datos.colecciones)
+    ? datos.colecciones.filter((valor): valor is string => typeof valor === "string")
+    : typeof datos.colecciones === "string" ? [datos.colecciones] : [];
+  const categoriasAnteriores = [datos.categoria, ...(Array.isArray(datos.categorias) ? datos.categorias : [])]
+    .filter((valor): valor is string => typeof valor === "string");
+  return [...new Set([...guardadas, ...categoriasAnteriores].map((nombre) => nombre.trim()).filter(Boolean))];
+}
 
 function IconoCompartir({ className = "h-4 w-4" }: { className?: string }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.7 10.6 6.6-4.2M8.7 13.4l6.6 4.2" /></svg>;
@@ -59,9 +71,11 @@ function IconoRed({ nombre, className = "h-5 w-5" }: { nombre: string; className
 
 export default function Home() {
   const [obras, setObras] = useState<Obra[]>([]);
+  const [catalogoColecciones, setCatalogoColecciones] = useState<string[]>([]);
   const [cargando, setCargando] = useState(true);
   const [obraSeleccionada, setObraSeleccionada] = useState<Obra | null>(null);
-  const [categoria, setCategoria] = useState("Todas");
+  const [coleccion, setColeccion] = useState("Todas");
+  const [tecnica, setTecnica] = useState("Todas");
   const [disponibilidad, setDisponibilidad] = useState("Todas");
   const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
   const filtrosRef = useRef<HTMLDivElement | null>(null);
@@ -79,11 +93,15 @@ export default function Home() {
           return {
             id: documento.id, titulo: datos.titulo || "", tecnica: datos.tecnica || "",
             dimensiones: datos.dimensiones || "", anio: datos.anio || "", descripcion: datos.descripcion || "",
-            imagenUrl: datos.imagenUrl || "", audioUrl: datos.audioUrl || "", categoria: datos.categoria || "Pintura",
+            imagenUrl: datos.imagenUrl || "", audioUrl: datos.audioUrl || "", colecciones: obtenerColecciones(datos),
             precio: datos.precio || "", disponible: datos.disponible ?? true,
           };
         });
         setObras(obrasCargadas);
+        const params = new URLSearchParams(window.location.search);
+        setColeccion(params.get("coleccion") || "Todas");
+        setTecnica(params.get("tecnica") || "Todas");
+        setDisponibilidad(params.get("disponibilidad") || "Todas");
         const idCompartido = window.location.hash.startsWith("#obra=") ? window.location.hash.slice(6) : "";
         const obraCompartida = obrasCargadas.find((obra) => obra.id === idCompartido);
         if (obraCompartida) setObraSeleccionada(obraCompartida);
@@ -99,6 +117,9 @@ export default function Home() {
         const resultado = await getDoc(doc(db, "configuracion", "artista"));
         if (resultado.exists()) {
           const datos = resultado.data();
+          const guardadas = [...new Set([...leerColeccionesLocales(), ...(Array.isArray(datos.colecciones) ? datos.colecciones : [])])];
+          setCatalogoColecciones(guardadas);
+          try { window.localStorage.setItem(claveColeccionesLocales, JSON.stringify(guardadas)); } catch { /* almacenamiento opcional */ }
           const redesGuardadas = datos.redes;
           const redes = Array.isArray(redesGuardadas)
             ? redesGuardadas
@@ -106,7 +127,10 @@ export default function Home() {
           setPerfil({ nombre: datos.nombre || "Yasiel Pérez Díaz", biografia: datos.biografia || "", whatsapp: datos.whatsapp || "", redes });
           setFotoArtistaUrl(datos.fotoUrl || "");
         }
-      } catch (error) { console.error("Error cargando la ficha del artista:", error); }
+      } catch (error) {
+        console.error("Error cargando la ficha del artista:", error);
+        setCatalogoColecciones(leerColeccionesLocales());
+      }
     }
     cargarPerfil();
   }, []);
@@ -127,11 +151,26 @@ export default function Home() {
     };
   }, [filtrosAbiertos]);
 
+  const coleccionesDisponibles = useMemo(() => ["Todas", ...Array.from(new Set([...catalogoColecciones, ...obras.flatMap((obra) => obra.colecciones)]))], [catalogoColecciones, obras]);
+  const tecnicasDisponibles = useMemo(() => ["Todas", ...Array.from(new Set(obras.map((obra) => obra.tecnica.trim()).filter(Boolean)))], [obras]);
+
   const obrasFiltradas = useMemo(() => obras.filter((obra) => {
-    const coincideCategoria = categoria === "Todas" || obra.categoria === categoria;
+    const coincideColeccion = coleccion === "Todas" || obra.colecciones.some((nombre) => nombre.trim().localeCompare(coleccion.trim(), undefined, { sensitivity: "base" }) === 0);
+    const coincideTecnica = tecnica === "Todas" || obra.tecnica.trim().localeCompare(tecnica.trim(), undefined, { sensitivity: "base" }) === 0;
     const coincideDisponibilidad = disponibilidad === "Todas" || (disponibilidad === "Disponibles" ? obra.disponible : !obra.disponible);
-    return coincideCategoria && coincideDisponibilidad;
-  }), [categoria, disponibilidad, obras]);
+    return coincideColeccion && coincideTecnica && coincideDisponibilidad;
+  }), [coleccion, tecnica, disponibilidad, obras]);
+
+  function limpiarFiltros() {
+    setColeccion("Todas");
+    setTecnica("Todas");
+    setDisponibilidad("Todas");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("coleccion");
+    url.searchParams.delete("tecnica");
+    url.searchParams.delete("disponibilidad");
+    window.history.replaceState(null, "", url.toString());
+  }
 
   async function compartir(obra: Obra) {
     const url = `${window.location.origin}/#obra=${obra.id}`;
@@ -146,6 +185,22 @@ export default function Home() {
     try {
       if (navigator.share) await navigator.share({ title: "Yass — Estudio de arte", text: "Descubre la galería de Yasiel Pérez Díaz.", url });
       else { await navigator.clipboard.writeText(url); setAviso("Enlace de la página copiado"); window.setTimeout(() => setAviso(""), 2200); }
+    } catch { /* El usuario puede cerrar el diálogo de compartir. */ }
+  }
+
+  async function compartirFiltro() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("coleccion");
+    url.searchParams.delete("tecnica");
+    url.searchParams.delete("disponibilidad");
+    if (coleccion !== "Todas") url.searchParams.set("coleccion", coleccion);
+    if (tecnica !== "Todas") url.searchParams.set("tecnica", tecnica);
+    if (disponibilidad !== "Todas") url.searchParams.set("disponibilidad", disponibilidad);
+    url.hash = "galeria";
+    try {
+      const titulo = [coleccion !== "Todas" ? `Colección ${coleccion}` : "Galería de Yass", tecnica !== "Todas" ? `Técnica ${tecnica}` : ""].filter(Boolean).join(" · ");
+      if (navigator.share) await navigator.share({ title: titulo, text: "Explora esta selección de obras de Yass.", url: url.toString() });
+      else { await navigator.clipboard.writeText(url.toString()); setAviso("Enlace del filtro copiado"); window.setTimeout(() => setAviso(""), 2200); }
     } catch { /* El usuario puede cerrar el diálogo de compartir. */ }
   }
 
@@ -190,24 +245,24 @@ export default function Home() {
             <div className="relative inline-block">
               <button type="button" onClick={() => setFiltrosAbiertos((abierto) => !abierto)} aria-expanded={filtrosAbiertos} aria-controls="menu-filtros-obras" className="inline-flex min-h-12 items-center gap-3 rounded-full border border-[#5a5046] bg-[#191714] px-5 text-sm text-[#e8dfd4] shadow-sm transition-all duration-300 hover:border-[#bf775f] hover:bg-[#211e1a]">
                 <IconoFiltro /> <span>Filtrar obras</span>
-                {(categoria !== "Todas" || disponibilidad !== "Todas") && <span className="grid h-6 min-w-6 place-items-center rounded-full bg-[#bf775f] px-1.5 text-[11px] font-medium text-[#11100f]">{Number(categoria !== "Todas") + Number(disponibilidad !== "Todas")}</span>}
+                {(coleccion !== "Todas" || tecnica !== "Todas" || disponibilidad !== "Todas") && <span className="grid h-6 min-w-6 place-items-center rounded-full bg-[#bf775f] px-1.5 text-[11px] font-medium text-[#11100f]">{Number(coleccion !== "Todas") + Number(tecnica !== "Todas") + Number(disponibilidad !== "Todas")}</span>}
                 <span aria-hidden="true" className={`ml-1 text-xs transition-transform duration-300 ${filtrosAbiertos ? "rotate-180" : ""}`}>⌄</span>
               </button>
-              {filtrosAbiertos && <div id="menu-filtros-obras" className="filter-menu absolute left-0 top-[calc(100%+0.65rem)] z-30 w-[min(21rem,calc(100vw-2.5rem))] rounded-2xl border border-[#484139] bg-[#191714] p-5 shadow-2xl shadow-black/40 animate-reveal">
-                <div className="mb-5 flex items-center justify-between"><p className="font-serif text-lg">Filtrar colección</p><button type="button" onClick={() => { setCategoria("Todas"); setDisponibilidad("Todas"); }} className="rounded-full px-3 py-2 text-xs text-[#bfaa96] transition-colors hover:bg-white/[0.06] hover:text-white">Limpiar</button></div>
-                <fieldset><legend className="mb-2 text-[10px] uppercase tracking-[0.17em] text-[#938a7f]">Categoría</legend><div className="grid grid-cols-2 gap-2">{categorias.map((item) => <button type="button" key={item} aria-pressed={categoria === item} onClick={() => setCategoria(item)} className={`min-h-10 rounded-xl border px-3 text-left text-xs transition-all duration-200 ${categoria === item ? "border-[#bf775f]/70 bg-[#bf775f]/15 text-[#e4b19a]" : "border-transparent text-[#c8c0b5] hover:border-[#484139] hover:bg-white/[0.035]"}`}>{item}</button>)}</div></fieldset>
+              {filtrosAbiertos && <div id="menu-filtros-obras" className="filter-menu mt-3 max-h-[70vh] w-[min(24rem,calc(100vw-2.5rem))] overflow-y-auto rounded-2xl border border-[#484139] bg-[#191714] p-5 shadow-2xl shadow-black/40 animate-reveal">
+                <div className="mb-5 flex items-center justify-between"><p className="font-serif text-lg">Filtrar obras</p><button type="button" onClick={limpiarFiltros} className="rounded-full px-3 py-2 text-xs text-[#bfaa96] transition-colors hover:bg-white/[0.06] hover:text-white">Limpiar</button></div>
+                <fieldset><legend className="mb-2 block text-[10px] uppercase tracking-[0.17em] text-[#938a7f]">Colecciones</legend>{coleccionesDisponibles.length === 1 ? <p className="px-3 py-2 text-xs text-[#938a7f]">Las obras aún no tienen colecciones asignadas.</p> : <div className="grid grid-cols-2 gap-2">{coleccionesDisponibles.map((item) => <button type="button" key={item} aria-pressed={coleccion === item} onClick={() => setColeccion(item)} className={`min-h-10 rounded-xl border px-3 text-left text-xs transition-all duration-200 ${coleccion === item ? "border-[#bf775f]/70 bg-[#bf775f]/15 text-[#e4b19a]" : "border-transparent text-[#c8c0b5] hover:border-[#484139] hover:bg-white/[0.035]"}`}>{item}</button>)}</div>}</fieldset>
+                <fieldset className="mt-5 border-t border-white/[0.07] pt-4"><legend className="mb-2 text-[10px] uppercase tracking-[0.17em] text-[#938a7f]">Técnica</legend><div className="grid grid-cols-2 gap-2">{tecnicasDisponibles.map((item) => <button type="button" key={item} aria-pressed={tecnica === item} onClick={() => setTecnica(item)} className={`min-h-10 rounded-xl border px-3 text-left text-xs transition-all duration-200 ${tecnica === item ? "border-[#bf775f]/70 bg-[#bf775f]/15 text-[#e4b19a]" : "border-transparent text-[#c8c0b5] hover:border-[#484139] hover:bg-white/[0.035]"}`}>{item}</button>)}</div></fieldset>
                 <fieldset className="mt-5 border-t border-white/[0.07] pt-4"><legend className="mb-2 text-[10px] uppercase tracking-[0.17em] text-[#938a7f]">Disponibilidad</legend><div className="space-y-1">{[["Todas", "Todas las obras"], ["Disponibles", "Disponibles para comprar"], ["Vendidas", "Vendidas"]].map(([valor, etiqueta]) => <button type="button" key={valor} aria-pressed={disponibilidad === valor} onClick={() => setDisponibilidad(valor)} className={`flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-xs transition-all duration-200 ${disponibilidad === valor ? "bg-[#bf775f]/15 text-[#e4b19a]" : "text-[#c8c0b5] hover:bg-white/[0.035]"}`}><span className={`grid h-4 w-4 place-items-center rounded-full border ${disponibilidad === valor ? "border-[#bf8871]" : "border-[#63594e]"}`}>{disponibilidad === valor && <span className="h-2 w-2 rounded-full bg-[#bf8871]" />}</span>{etiqueta}</button>)}</div></fieldset>
               </div>}
             </div>
-            {(categoria !== "Todas" || disponibilidad !== "Todas") && <span className="ml-3 text-xs text-[#938a7f]">{obrasFiltradas.length} {obrasFiltradas.length === 1 ? "obra" : "obras"}</span>}
+            {(coleccion !== "Todas" || tecnica !== "Todas" || disponibilidad !== "Todas") && <><span className="ml-3 text-xs text-[#938a7f]">{obrasFiltradas.length} {obrasFiltradas.length === 1 ? "obra" : "obras"}</span><button type="button" onClick={compartirFiltro} className="ml-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-[#484139] px-4 text-xs text-[#d6c6ae] transition hover:border-[#bf775f] hover:bg-[#bf775f]/10" title="Compartir filtro"><IconoCompartir /> Compartir filtro</button></>}
           </div>
           {cargando ? <p className="text-[#938a7f]">Cargando obras...</p> : obrasFiltradas.length === 0 ? <p className="py-12 text-[#938a7f]">{obras.length ? "No hay obras con estos filtros." : "Próximamente, nuevas obras."}</p> :
             <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:gap-x-6">
               {obrasFiltradas.map((obra, indice) => <article key={obra.id} className="art-card group animate-reveal transition-all duration-500" style={{ animationDelay: `${Math.min(indice, 8) * 70}ms` }}>
                 <button onClick={() => setObraSeleccionada(obra)} className="block w-full text-left" aria-label={`Ver ${obra.titulo}`}>
                   <div className="relative aspect-[1.12/1] overflow-hidden bg-[#211e1a]">
-                    {obra.imagenUrl && <Image src={obra.imagenUrl} alt={obra.titulo} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" loading="lazy" className="object-cover transition duration-700 group-hover:scale-[1.035]" />}
-                    <span className="absolute left-4 top-4 rounded-full bg-[#11100f]/75 px-3 py-2 text-[10px] uppercase tracking-[0.16em] backdrop-blur">{obra.categoria}</span>
+                    {obra.imagenUrl && <Image src={obra.imagenUrl} alt={obra.titulo} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" loading="lazy" unoptimized className="object-cover transition duration-700 group-hover:scale-[1.035]" />}
                     <span className={`absolute right-4 top-4 rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.12em] ${obra.disponible ? "bg-[#e9e1d5] text-[#28231e]" : "bg-[#37332f] text-[#d2c8bb]"}`}>{obra.disponible ? "Disponible" : "Vendida"}</span>
                   </div>
                   <div className="flex items-start justify-between gap-2 pt-2">
@@ -225,7 +280,7 @@ export default function Home() {
       </section>
 
       <section id="artista" className="scroll-mt-8 border-y border-[#312d28] bg-[#191714] px-6 py-20 sm:py-28 md:px-16">
-        <div className="mx-auto flex max-w-4xl flex-col gap-7 sm:flex-row sm:items-start sm:gap-10">{fotoArtistaUrl && <Image src={fotoArtistaUrl} alt={`Retrato de ${perfil.nombre}`} width={176} height={176} sizes="(max-width: 640px) 144px, 176px" loading="lazy" className="h-36 w-36 shrink-0 rounded-full border border-[#484139] object-cover sm:h-44 sm:w-44" />}<div><p className="eyebrow">EL ARTISTA</p><h2 className="display-title mt-4 text-4xl font-light sm:text-6xl">{perfil.nombre}</h2>{perfil.biografia && <p className="mt-7 max-w-2xl whitespace-pre-line font-serif text-lg leading-relaxed text-[#b9b0a5] sm:text-xl">{perfil.biografia}</p>}<div className="mt-8 flex flex-wrap gap-3">{perfil.redes.filter((red) => red.url?.trim()).map((red, indice) => <a key={`${red.nombre}-${indice}`} href={red.url} target="_blank" rel="noreferrer" aria-label={red.nombre} title={red.nombre} className="grid h-12 w-12 place-items-center border border-[#484139] text-[#d6c6ae] transition hover:border-[#bf775f] hover:bg-[#bf775f]/10 hover:text-white"><IconoRed nombre={red.nombre} /></a>)}</div></div></div>
+        <div className="mx-auto flex max-w-4xl flex-col gap-7 sm:flex-row sm:items-start sm:gap-10">{fotoArtistaUrl && <Image src={fotoArtistaUrl} alt={`Retrato de ${perfil.nombre}`} width={176} height={176} sizes="(max-width: 640px) 144px, 176px" loading="lazy" unoptimized className="h-36 w-36 shrink-0 rounded-full border border-[#484139] object-cover sm:h-44 sm:w-44" />}<div><p className="eyebrow">EL ARTISTA</p><h2 className="display-title mt-4 text-4xl font-light sm:text-6xl">{perfil.nombre}</h2>{perfil.biografia && <p className="mt-7 max-w-2xl whitespace-pre-line font-serif text-lg leading-relaxed text-[#b9b0a5] sm:text-xl">{perfil.biografia}</p>}<div className="mt-8 flex flex-wrap gap-3">{perfil.redes.filter((red) => red.url?.trim()).map((red, indice) => <a key={`${red.nombre}-${indice}`} href={red.url} target="_blank" rel="noreferrer" aria-label={red.nombre} title={red.nombre} className="grid h-12 w-12 place-items-center border border-[#484139] text-[#d6c6ae] transition hover:border-[#bf775f] hover:bg-[#bf775f]/10 hover:text-white"><IconoRed nombre={red.nombre} /></a>)}</div></div></div>
       </section>
 
       {obraSeleccionada && <div className="fixed inset-0 z-50 overflow-y-auto bg-[#100f0e]/90 backdrop-blur-md" onClick={() => setObraSeleccionada(null)}>
@@ -233,9 +288,9 @@ export default function Home() {
           <div className="my-auto w-full max-w-6xl animate-reveal">
             <div className="mb-3 flex justify-end"><button onClick={() => setObraSeleccionada(null)} aria-label="Cerrar" className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 text-3xl text-[#b9b0a5] transition-colors hover:border-white/30 hover:text-white">×</button></div>
             <div className="grid items-center gap-7 md:grid-cols-2 md:gap-12" style={{ touchAction: "pan-y" }} onTouchStart={(event) => { inicioToque.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={(event) => { if (inicioToque.current !== null) { const delta = event.changedTouches[0].clientX - inicioToque.current; if (Math.abs(delta) > 48) cambiarObra(delta < 0 ? 1 : -1); } inicioToque.current = null; }}>
-              <div className="relative h-[58vh] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#201d19] md:h-[78vh]"><Image src={obraSeleccionada.imagenUrl} alt={obraSeleccionada.titulo} fill sizes="(max-width: 768px) 100vw, 50vw" className="object-contain" />{obras.length > 1 && <><button onClick={() => cambiarObra(-1)} aria-label="Obra anterior" className="absolute left-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">‹</button><button onClick={() => cambiarObra(1)} aria-label="Obra siguiente" className="absolute right-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">›</button></>}</div>
+              <div className="relative h-[58vh] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#201d19] md:h-[78vh]"><Image src={obraSeleccionada.imagenUrl} alt={obraSeleccionada.titulo} fill sizes="(max-width: 768px) 100vw, 50vw" unoptimized className="object-contain" />{obras.length > 1 && <><button onClick={() => cambiarObra(-1)} aria-label="Obra anterior" className="absolute left-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">‹</button><button onClick={() => cambiarObra(1)} aria-label="Obra siguiente" className="absolute right-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">›</button></>}</div>
               <div className="pb-8">
-                <p className="eyebrow">{obraSeleccionada.categoria} · {obraSeleccionada.disponible ? "DISPONIBLE" : "VENDIDA"}</p>
+                <p className="eyebrow">{obraSeleccionada.colecciones.join(" · ")} · {obraSeleccionada.disponible ? "DISPONIBLE" : "VENDIDA"}</p>
                 <h2 className="display-title mt-4 text-4xl font-light leading-tight sm:text-6xl">{obraSeleccionada.titulo}</h2>
                 <p className="mt-4 font-serif text-2xl text-[#d2a08c]">{obraSeleccionada.precio ? `$${obraSeleccionada.precio}` : "Precio a consultar"}</p>
                 <div className="my-6 h-px w-14 bg-[#bf775f]" />

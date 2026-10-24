@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import ImageEditor from "./image-editor";
 import {
+  arrayRemove,
+  arrayUnion,
   collection,
   addDoc,
   getDocs,
@@ -13,6 +15,7 @@ import {
   getDoc,
   setDoc,
   getFirestore,
+  writeBatch,
 } from "firebase/firestore";
 import {
   getAuth,
@@ -26,6 +29,15 @@ import app from "../../firebase";
 const db = getFirestore(app);
 const auth = getAuth(app);
 const artistDoc = doc(db, "configuracion", "artista");
+const claveColeccionesLocales = "galeria-yass-colecciones";
+function leerColeccionesLocales(): string[] {
+  try { return JSON.parse(window.localStorage.getItem(claveColeccionesLocales) || "[]") as string[]; }
+  catch { return []; }
+}
+function guardarColeccionesLocales(nombres: string[]) {
+  try { window.localStorage.setItem(claveColeccionesLocales, JSON.stringify(nombres)); }
+  catch { /* El navegador puede tener el almacenamiento local desactivado. */ }
+}
 type RedSocial = { nombre: string; url: string };
 const redesDisponibles = [
   "Instagram", "Facebook", "X", "TikTok", "YouTube", "LinkedIn", "Pinterest", "Behance",
@@ -33,7 +45,15 @@ const redesDisponibles = [
   "Spotify", "SoundCloud", "Vimeo", "Flickr", "Dribbble", "Tumblr", "Mastodon", "Patreon",
   "WeChat", "VK", "GitHub", "Substack", "Bandcamp", "Sitio web", "Otra plataforma",
 ];
-const tecnicasDisponibles = ["Óleo sobre lienzo", "Dibujo", "Grabado", "Acrílico sobre lienzo", "Acuarela", "Grafito sobre papel", "Tinta sobre papel", "Técnica mixta", "Escultura"];
+const tecnicasDisponibles = [
+  "Óleo sobre lienzo", "Acrílico sobre lienzo", "Acuarela", "Gouache", "Témpera", "Fresco", "Encáustica",
+  "Lápiz de grafito", "Carboncillo", "Sanguina", "Pastel seco", "Pastel al óleo", "Tinta", "Plumilla",
+  "Lápices de color", "Marcadores", "Dibujo a mano alzada", "Xilografía", "Linograbado", "Grabado en metal",
+  "Aguafuerte", "Aguatinta", "Punta seca", "Litografía", "Serigrafía", "Monotipia", "Collagrafía",
+  "Modelado en arcilla", "Cerámica", "Tallado en madera", "Tallado en piedra", "Fundición en bronce",
+  "Modelado en yeso", "Ensamblaje", "Soldadura artística", "Cartonería", "Papel maché", "Mosaico",
+  "Vitral", "Arte textil", "Bordado", "Tejido", "Collage", "Técnica mixta", "Instalación", "Otra técnica",
+];
 const aniosDisponibles = Array.from({ length: new Date().getFullYear() - 1899 }, (_, indice) => String(new Date().getFullYear() - indice));
 
 type Obra = {
@@ -47,11 +67,37 @@ type Obra = {
   audioUrl: string;
   precio: string;
   disponible: boolean;
-  categoria: string;
+  colecciones: string[];
+  categoriaLegacy?: string;
+  categoriasLegacy?: string[];
 };
 
+function obtenerColecciones(datos: { colecciones?: unknown; categoria?: unknown; categorias?: unknown }): string[] {
+  const guardadas = Array.isArray(datos.colecciones)
+    ? datos.colecciones.filter((valor): valor is string => typeof valor === "string")
+    : typeof datos.colecciones === "string" ? [datos.colecciones] : [];
+  const categoriasAnteriores = [datos.categoria, ...(Array.isArray(datos.categorias) ? datos.categorias : [])]
+    .filter((valor): valor is string => typeof valor === "string");
+  return [...new Set([...guardadas, ...categoriasAnteriores].map((nombre) => nombre.trim()).filter(Boolean))];
+}
+
+function mismaColeccion(a: string, b: string) {
+  return a.trim().localeCompare(b.trim(), undefined, { sensitivity: "base" }) === 0;
+}
+
+function SelectorColecciones({ opciones, seleccionadas, nueva, alCambiarNueva, alAlternar, alAgregar }: {
+  opciones: string[];
+  seleccionadas: string[];
+  nueva: string;
+  alCambiarNueva: (valor: string) => void;
+  alAlternar: (nombre: string) => void;
+  alAgregar: () => void;
+}) {
+  return <div><div className="flex flex-wrap gap-2">{opciones.map((nombre) => <button key={nombre} type="button" onClick={() => alAlternar(nombre)} aria-pressed={seleccionadas.includes(nombre)} className={`rounded-full border px-3 py-2 text-xs ${seleccionadas.includes(nombre) ? "border-red-500 bg-red-500/15 text-white" : "border-zinc-700 text-gray-400"}`}>{nombre}</button>)}</div><div className="mt-3 flex gap-2"><input value={nueva} onChange={(e) => alCambiarNueva(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); alAgregar(); } }} className="min-w-0 flex-1 border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm" placeholder="Nombre de nueva colección" /><button type="button" onClick={alAgregar} className="border border-zinc-700 px-3 text-sm text-white">Agregar</button></div></div>;
+}
+
 export default function AdminPage() {
-  const [seccionActiva, setSeccionActiva] = useState<"perfil" | "agregar" | "obras" | "editar">("obras");
+  const [seccionActiva, setSeccionActiva] = useState<"perfil" | "agregar" | "obras" | "colecciones" | "editar">("obras");
   const [usuario, setUsuario] = useState<User | null>(null);
   const [cargandoUsuario, setCargandoUsuario] = useState(true);
 
@@ -66,7 +112,8 @@ export default function AdminPage() {
   const [unidad, setUnidad] = useState("cm");
   const [anio, setAnio] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [categoria, setCategoria] = useState("Pintura");
+  const [colecciones, setColecciones] = useState<string[]>([]);
+  const [nuevaColeccion, setNuevaColeccion] = useState("");
   const [precio, setPrecio] = useState("");
   const [disponible, setDisponible] = useState(true);
 
@@ -80,6 +127,8 @@ export default function AdminPage() {
 
   const [mensaje, setMensaje] = useState("");
   const [obras, setObras] = useState<Obra[]>([]);
+  const [catalogoColecciones, setCatalogoColecciones] = useState<string[]>([]);
+  const [eliminandoColeccion, setEliminandoColeccion] = useState("");
   const [cargandoObras, setCargandoObras] = useState(true);
   const [subiendo, setSubiendo] = useState(false);
 
@@ -89,7 +138,8 @@ export default function AdminPage() {
   const [editDimensiones, setEditDimensiones] = useState("");
   const [editAnio, setEditAnio] = useState("");
   const [editDescripcion, setEditDescripcion] = useState("");
-  const [editCategoria, setEditCategoria] = useState("Pintura");
+  const [editColecciones, setEditColecciones] = useState<string[]>([]);
+  const [nuevaColeccionEdicion, setNuevaColeccionEdicion] = useState("");
   const [editPrecio, setEditPrecio] = useState("");
   const [editDisponible, setEditDisponible] = useState(true);
   const [editImagen, setEditImagen] = useState<File | null>(null);
@@ -103,6 +153,44 @@ export default function AdminPage() {
   const vistaPreviaFotoUrl = useRef("");
   const [redes, setRedes] = useState<RedSocial[]>([{ nombre: "Instagram", url: "" }]);
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
+
+  async function agregarNuevaColeccion() {
+    const nombre = nuevaColeccion.trim();
+    setNuevaColeccion("");
+    if (!nombre) return;
+    const catalogoActualizado = [...new Set([...catalogoColecciones, nombre])];
+    setCatalogoColecciones(catalogoActualizado);
+    guardarColeccionesLocales(catalogoActualizado);
+    setColecciones((actuales) => actuales.includes(nombre) ? actuales : [...actuales, nombre]);
+    try {
+      await setDoc(artistDoc, { colecciones: arrayUnion(nombre) }, { merge: true });
+      setCatalogoColecciones((actuales) => actuales.includes(nombre) ? actuales : [...actuales, nombre]);
+      setColecciones((actuales) => actuales.includes(nombre) ? actuales : [...actuales, nombre]);
+      setMensaje(`Colección “${nombre}” guardada para futuras obras.`);
+    } catch (error) {
+      console.error(error);
+      setMensaje("La colección quedó guardada en este navegador, pero Firebase rechazó la sincronización.");
+    }
+  }
+
+  async function agregarColeccionEdicion() {
+    const nombre = nuevaColeccionEdicion.trim();
+    setNuevaColeccionEdicion("");
+    if (!nombre) return;
+    const catalogoActualizado = [...new Set([...catalogoColecciones, nombre])];
+    setCatalogoColecciones(catalogoActualizado);
+    guardarColeccionesLocales(catalogoActualizado);
+    setEditColecciones((actuales) => actuales.includes(nombre) ? actuales : [...actuales, nombre]);
+    try {
+      await setDoc(artistDoc, { colecciones: arrayUnion(nombre) }, { merge: true });
+      setCatalogoColecciones((actuales) => actuales.includes(nombre) ? actuales : [...actuales, nombre]);
+      setEditColecciones((actuales) => actuales.includes(nombre) ? actuales : [...actuales, nombre]);
+      setMensaje(`Colección “${nombre}” guardada para futuras obras.`);
+    } catch (error) {
+      console.error(error);
+      setMensaje("La colección quedó guardada en este navegador, pero Firebase rechazó la sincronización.");
+    }
+  }
 
   function cambiarImagen(archivo: File | null) {
     if (vistaPreviaObraUrl.current) URL.revokeObjectURL(vistaPreviaObraUrl.current);
@@ -138,6 +226,9 @@ export default function AdminPage() {
         const perfil = await getDoc(artistDoc);
         if (perfil.exists()) {
           const datos = perfil.data();
+          const catalogo = [...new Set([...leerColeccionesLocales(), ...(Array.isArray(datos.colecciones) ? datos.colecciones : [])])];
+          setCatalogoColecciones(catalogo);
+          guardarColeccionesLocales(catalogo);
           setArtistaNombre(datos.nombre || "Yasiel Pérez Díaz");
           setArtistaBio(datos.biografia || "");
           setArtistaWhatsApp(datos.whatsapp || "");
@@ -147,7 +238,10 @@ export default function AdminPage() {
             ? (redesGuardadas.length ? redesGuardadas : [{ nombre: "Instagram", url: "" }])
             : Object.entries(redesGuardadas || {}).map(([nombre, url]) => ({ nombre, url: String(url) })));
         }
-      } catch (error) { console.error("Error cargando el perfil:", error); }
+      } catch (error) {
+        console.error("Error cargando el perfil:", error);
+        setCatalogoColecciones(leerColeccionesLocales());
+      }
     }
     cargarPerfil();
   }, []);
@@ -164,6 +258,119 @@ export default function AdminPage() {
       console.error(error);
       setMensaje("No se pudo guardar la ficha del artista.");
     } finally { setGuardandoPerfil(false); }
+  }
+
+  async function eliminarColeccion(nombre: string) {
+    const confirmar = window.confirm(`¿Seguro que quieres eliminar la colección “${nombre}”? También se quitará de todas las obras que la tengan asignada.`);
+    if (!confirmar) return;
+
+    setEliminandoColeccion(nombre);
+    setMensaje("Eliminando colección de las obras...");
+    try {
+      const afectadas = obras.filter((obra) => obra.colecciones.some((coleccion) => mismaColeccion(coleccion, nombre)) || (obra.categoriaLegacy && mismaColeccion(obra.categoriaLegacy, nombre)) || obra.categoriasLegacy?.some((categoria) => mismaColeccion(categoria, nombre)));
+
+      for (let inicio = 0; inicio < afectadas.length; inicio += 450) {
+        const lote = writeBatch(db);
+        for (const obra of afectadas.slice(inicio, inicio + 450)) {
+          const coleccionesRestantes = obra.colecciones.filter((coleccion) => !mismaColeccion(coleccion, nombre));
+          const cambios: { colecciones: string[]; categoria?: string; categorias: string[] } = {
+            colecciones: coleccionesRestantes,
+            categorias: (obra.categoriasLegacy ?? []).filter((categoria) => !mismaColeccion(categoria, nombre)),
+          };
+          if (obra.categoriaLegacy && mismaColeccion(obra.categoriaLegacy, nombre)) cambios.categoria = "";
+          lote.update(doc(db, "obras", obra.id), cambios);
+        }
+        await lote.commit();
+      }
+
+      const actualizadas = obras.map((obra) => ({
+        ...obra,
+        colecciones: obra.colecciones.filter((coleccion) => !mismaColeccion(coleccion, nombre)),
+        categoriaLegacy: obra.categoriaLegacy && mismaColeccion(obra.categoriaLegacy, nombre) ? "" : obra.categoriaLegacy,
+        categoriasLegacy: (obra.categoriasLegacy ?? []).filter((categoria) => !mismaColeccion(categoria, nombre)),
+      }));
+      const catalogo = catalogoColecciones.filter((coleccion) => !mismaColeccion(coleccion, nombre));
+      setObras(actualizadas);
+      setCatalogoColecciones(catalogo);
+      guardarColeccionesLocales(catalogo);
+      setColecciones((actuales) => actuales.filter((coleccion) => !mismaColeccion(coleccion, nombre)));
+      setEditColecciones((actuales) => actuales.filter((coleccion) => !mismaColeccion(coleccion, nombre)));
+      try {
+        await setDoc(artistDoc, { colecciones: arrayRemove(nombre) }, { merge: true });
+        setMensaje(`Colección “${nombre}” eliminada.`);
+      } catch (error) {
+        console.error(error);
+        setMensaje(`Colección eliminada de las obras y de este navegador; Firebase rechazó sincronizar el catálogo.`);
+      }
+    } catch (error) {
+      console.error(error);
+      setMensaje("No se pudo eliminar la colección. Firebase rechazó el cambio; revisa los permisos.");
+    } finally {
+      setEliminandoColeccion("");
+    }
+  }
+
+  async function editarColeccion(nombre: string) {
+    const respuesta = window.prompt(`Escribe el nuevo nombre para “${nombre}”:`, nombre);
+    if (respuesta === null) return;
+    const nuevoNombre = respuesta.trim();
+    if (!nuevoNombre) {
+      setMensaje("El nombre de la colección no puede quedar vacío.");
+      return;
+    }
+    if (mismaColeccion(nombre, nuevoNombre)) return;
+
+    const nombresActuales = [...catalogoColecciones, ...obras.flatMap((obra) => obra.colecciones)];
+    if (nombresActuales.some((actual) => mismaColeccion(actual, nuevoNombre) && !mismaColeccion(actual, nombre))) {
+      setMensaje(`Ya existe una colección llamada “${nuevoNombre}”.`);
+      return;
+    }
+
+    setEliminandoColeccion(nombre);
+    setMensaje("Actualizando nombre de la colección...");
+    try {
+      const reemplazar = (nombres: string[]) => [...new Set(nombres.map((actual) => mismaColeccion(actual, nombre) ? nuevoNombre : actual))];
+      const afectadas = obras.filter((obra) => obra.colecciones.some((actual) => mismaColeccion(actual, nombre)) || (obra.categoriaLegacy && mismaColeccion(obra.categoriaLegacy, nombre)) || obra.categoriasLegacy?.some((actual) => mismaColeccion(actual, nombre)));
+
+      for (let inicio = 0; inicio < afectadas.length; inicio += 450) {
+        const lote = writeBatch(db);
+        for (const obra of afectadas.slice(inicio, inicio + 450)) {
+          const cambios: { colecciones: string[]; categoria?: string; categorias: string[] } = {
+            colecciones: reemplazar(obra.colecciones),
+            categorias: reemplazar(obra.categoriasLegacy ?? []),
+          };
+          if (obra.categoriaLegacy) cambios.categoria = mismaColeccion(obra.categoriaLegacy, nombre) ? nuevoNombre : obra.categoriaLegacy;
+          lote.update(doc(db, "obras", obra.id), cambios);
+        }
+        await lote.commit();
+      }
+
+      const obrasActualizadas = obras.map((obra) => ({
+        ...obra,
+        colecciones: reemplazar(obra.colecciones),
+        categoriaLegacy: obra.categoriaLegacy && mismaColeccion(obra.categoriaLegacy, nombre) ? nuevoNombre : obra.categoriaLegacy,
+        categoriasLegacy: reemplazar(obra.categoriasLegacy ?? []),
+      }));
+      const catalogoActualizado = reemplazar([...new Set(nombresActuales)]);
+      setObras(obrasActualizadas);
+      setCatalogoColecciones(catalogoActualizado);
+      guardarColeccionesLocales(catalogoActualizado);
+      setColecciones((actuales) => reemplazar(actuales));
+      setEditColecciones((actuales) => reemplazar(actuales));
+
+      try {
+        await setDoc(artistDoc, { colecciones: catalogoActualizado }, { merge: true });
+        setMensaje(`Colección renombrada a “${nuevoNombre}” en el catálogo y las obras.`);
+      } catch (error) {
+        console.error(error);
+        setMensaje("La colección se renombró en las obras y en este navegador, pero Firebase rechazó actualizar el catálogo.");
+      }
+    } catch (error) {
+      console.error(error);
+      setMensaje("No se pudo cambiar el nombre. Firebase rechazó la actualización; revisa los permisos.");
+    } finally {
+      setEliminandoColeccion("");
+    }
   }
 
   useEffect(() => {
@@ -185,7 +392,9 @@ export default function AdminPage() {
             audioUrl: datos.audioUrl || "",
             precio: datos.precio || "",
             disponible: datos.disponible ?? true,
-            categoria: datos.categoria || "Pintura",
+            colecciones: obtenerColecciones(datos),
+            categoriaLegacy: typeof datos.categoria === "string" ? datos.categoria : "",
+            categoriasLegacy: Array.isArray(datos.categorias) ? datos.categorias.filter((valor): valor is string => typeof valor === "string") : [],
           };
         });
 
@@ -252,7 +461,8 @@ export default function AdminPage() {
     setEditDimensiones(obra.dimensiones);
     setEditAnio(obra.anio);
     setEditDescripcion(obra.descripcion);
-    setEditCategoria(obra.categoria || "Pintura");
+    setEditColecciones(obra.colecciones || []);
+    setNuevaColeccionEdicion("");
     setEditPrecio(obra.precio || "");
     setEditDisponible(obra.disponible ?? true);
     setEditImagen(null);
@@ -276,13 +486,15 @@ export default function AdminPage() {
 
     try {
       setSubiendo(true);
-      const cambios: Record<string, string | boolean> = {
+      const cambios: Record<string, string | boolean | string[]> = {
         titulo: editTitulo,
         tecnica: editTecnica,
         dimensiones: editDimensiones,
         anio: editAnio,
         descripcion: editDescripcion,
-        categoria: editCategoria,
+        colecciones: editColecciones,
+        categoria: "",
+        categorias: [],
         precio: editPrecio,
         disponible: editDisponible,
       };
@@ -300,7 +512,9 @@ export default function AdminPage() {
                 dimensiones: editDimensiones,
                 anio: editAnio,
                 descripcion: editDescripcion,
-                categoria: editCategoria,
+                colecciones: editColecciones,
+                categoriaLegacy: "",
+                categoriasLegacy: [],
                 precio: editPrecio,
                 disponible: editDisponible,
                 imagenUrl: typeof cambios.imagenUrl === "string" ? cambios.imagenUrl : obra.imagenUrl,
@@ -314,7 +528,10 @@ export default function AdminPage() {
       setMensaje("Obra actualizada correctamente.");
     } catch (error) {
       console.error(error);
-      setMensaje("No se pudo actualizar la obra.");
+      const codigo = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+      setMensaje(codigo.includes("permission-denied")
+        ? "Firebase rechazó guardar la obra. Inicia sesión con la cuenta administradora configurada en firestore.rules."
+        : "No se pudo actualizar la obra. Revisa tu conexión e inténtalo de nuevo.");
     } finally {
       setSubiendo(false);
     }
@@ -324,26 +541,57 @@ export default function AdminPage() {
     archivo: File,
     tipo: "image" | "raw"
   ) {
-    const formData = new FormData();
+    const formatos = tipo === "image"
+      ? ["jpg", "jpeg", "png", "webp"]
+      : ["mp3", "m4a", "wav", "ogg", "webm", "aac", "mp4"];
+    const extension = archivo.name.split(".").pop()?.toLowerCase() || "";
+    const limiteBytes = tipo === "image" ? 10 * 1024 * 1024 : 25 * 1024 * 1024;
 
-    formData.append("file", archivo);
-    formData.append("upload_preset", "galeria_arte_yass");
-
-    const respuesta = await fetch(
-      `https://api.cloudinary.com/v1_1/emd4nyab/${tipo}/upload`,
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
-
-    if (!respuesta.ok) {
-      throw new Error("No se pudo subir el archivo a Cloudinary.");
+    if (!formatos.includes(extension)) {
+      throw new Error(tipo === "image"
+        ? "Usa una imagen JPG, PNG o WEBP."
+        : "Usa un audio MP3, M4A, WAV, OGG, WEBM o AAC.");
+    }
+    if (archivo.size > limiteBytes) {
+      throw new Error(tipo === "image"
+        ? "La imagen no debe superar 10 MB."
+        : "El audio no debe superar 25 MB.");
     }
 
-    const datos = await respuesta.json();
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) throw new Error("La sesión expiró. Vuelve a iniciar sesión.");
 
-    return datos.secure_url;
+    const firmaRespuesta = await fetch("/api/firmar-carga-cloudinary", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ resourceType: tipo }),
+    });
+    const firma = await firmaRespuesta.json().catch(() => ({}));
+    if (!firmaRespuesta.ok) {
+      throw new Error(firma.error || "No se pudo autorizar la subida del archivo.");
+    }
+
+    const formData = new FormData();
+    formData.append("file", archivo);
+    formData.append("api_key", firma.apiKey);
+    formData.append("timestamp", String(firma.timestamp));
+    formData.append("signature", firma.signature);
+    formData.append("folder", firma.folder);
+    formData.append("allowed_formats", firma.allowedFormats);
+
+    const respuesta = await fetch(
+      `https://api.cloudinary.com/v1_1/${firma.cloudName}/${tipo}/upload`,
+      { method: "POST", body: formData },
+    );
+    const datos = await respuesta.json().catch(() => ({}));
+    if (!respuesta.ok || typeof datos.secure_url !== "string") {
+      console.error("Cloudinary upload failed:", datos.error?.message);
+      throw new Error("No se pudo subir el archivo a Cloudinary. Comprueba la configuración y el formato.");
+    }
+    return datos.secure_url as string;
   }
 
   async function guardarObra() {
@@ -373,7 +621,7 @@ export default function AdminPage() {
         dimensiones: `${ancho} × ${alto} ${unidad}`,
         anio,
         descripcion,
-        categoria,
+        colecciones,
         precio,
         disponible,
         imagenUrl,
@@ -392,7 +640,8 @@ export default function AdminPage() {
       setUnidad("cm");
       setAnio("");
       setDescripcion("");
-      setCategoria("Pintura");
+      setColecciones([]);
+      setNuevaColeccion("");
       setPrecio("");
       setDisponible(true);
       cambiarImagen(null);
@@ -415,7 +664,9 @@ export default function AdminPage() {
           audioUrl: datos.audioUrl || "",
           precio: datos.precio || "",
           disponible: datos.disponible ?? true,
-          categoria: datos.categoria || "Pintura",
+          colecciones: obtenerColecciones(datos),
+          categoriaLegacy: typeof datos.categoria === "string" ? datos.categoria : "",
+          categoriasLegacy: Array.isArray(datos.categorias) ? datos.categorias.filter((valor): valor is string => typeof valor === "string") : [],
         };
       });
 
@@ -570,10 +821,11 @@ export default function AdminPage() {
 
         </div>
 
-        <nav className="admin-action-menu mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Acciones de administración">
+        <nav className="admin-action-menu mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Acciones de administración">
           <button type="button" onClick={() => setSeccionActiva("perfil")} aria-current={seccionActiva === "perfil" ? "page" : undefined} className={seccionActiva === "perfil" ? "admin-action active" : "admin-action"}><span>01</span><strong>Perfil público</strong><small>Editar información y redes</small></button>
           <button type="button" onClick={() => setSeccionActiva("agregar")} aria-current={seccionActiva === "agregar" ? "page" : undefined} className={seccionActiva === "agregar" ? "admin-action active" : "admin-action"}><span>02</span><strong>Agregar obra</strong><small>Publicar una nueva pieza</small></button>
           <button type="button" onClick={() => setSeccionActiva("obras")} aria-current={seccionActiva === "obras" ? "page" : undefined} className={seccionActiva === "obras" ? "admin-action active" : "admin-action"}><span>03</span><strong>Mis obras</strong><small>Administrar la colección</small></button>
+          <button type="button" onClick={() => setSeccionActiva("colecciones")} aria-current={seccionActiva === "colecciones" ? "page" : undefined} className={seccionActiva === "colecciones" ? "admin-action active" : "admin-action"}><span>04</span><strong>Colecciones</strong><small>Ver y eliminar colecciones</small></button>
         </nav>
         {seccionActiva === "perfil" && (
           <section className="mb-12 border border-zinc-800 p-6 md:p-10">
@@ -607,6 +859,17 @@ export default function AdminPage() {
             <button onClick={guardarPerfilArtista} disabled={guardandoPerfil} className="min-h-12 bg-white px-6 py-3 text-sm text-black transition hover:bg-gray-200 disabled:opacity-50">{guardandoPerfil ? "GUARDANDO..." : "GUARDAR FICHA DEL ARTISTA"}</button>
           </div>
         </section>
+        )}
+
+        {seccionActiva === "colecciones" && (
+          <section className="mb-12 border border-zinc-800 p-6 md:p-10">
+            <p className="text-xs tracking-[0.25em] text-red-400">CATÁLOGO</p>
+            <h2 className="mb-3 mt-3 text-2xl font-light">Administrar colecciones</h2>
+            <p className="mb-7 text-sm text-gray-400">Puedes cambiar el nombre o eliminar una colección. Ambos cambios se aplican a todas las obras que la tengan asignada.</p>
+            {Array.from(new Set([...catalogoColecciones, ...obras.flatMap((obra) => obra.colecciones)])).sort((a, b) => a.localeCompare(b)).length === 0
+              ? <p className="text-sm text-gray-400">Aún no hay colecciones guardadas.</p>
+              : <div className="space-y-2">{Array.from(new Set([...catalogoColecciones, ...obras.flatMap((obra) => obra.colecciones)])).sort((a, b) => a.localeCompare(b)).map((nombre) => <div key={nombre} className="flex flex-wrap items-center justify-between gap-4 border border-zinc-800 px-4 py-3"><div><p className="text-sm text-white">{nombre}</p><p className="mt-1 text-xs text-gray-500">{obras.filter((obra) => obra.colecciones.some((coleccion) => mismaColeccion(coleccion, nombre))).length} obras</p></div><div className="flex gap-2"><button type="button" disabled={eliminandoColeccion === nombre} onClick={() => editarColeccion(nombre)} className="border border-zinc-700 px-3 py-2 text-xs text-gray-200 hover:border-white disabled:opacity-50">Editar</button><button type="button" disabled={eliminandoColeccion === nombre} onClick={() => eliminarColeccion(nombre)} className="border border-red-900 px-3 py-2 text-xs text-red-300 hover:border-red-500 disabled:opacity-50">{eliminandoColeccion === nombre ? "Procesando..." : "Eliminar"}</button></div></div>)}</div>}
+          </section>
         )}
 
         {seccionActiva === "agregar" && (
@@ -659,7 +922,7 @@ export default function AdminPage() {
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
-              <div><label className="mb-2 block text-sm text-gray-400">Categoría</label><select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3 text-white">{["Pintura", "Grabado", "Ilustración", "Escultura"].map((item) => <option key={item}>{item}</option>)}</select></div>
+              <div className="sm:col-span-2"><label className="mb-2 block text-sm text-gray-400">Colecciones</label><SelectorColecciones opciones={Array.from(new Set([...catalogoColecciones, ...obras.flatMap((obra) => obra.colecciones), ...colecciones]))} seleccionadas={colecciones} nueva={nuevaColeccion} alCambiarNueva={setNuevaColeccion} alAlternar={(nombre) => setColecciones((actuales) => actuales.includes(nombre) ? actuales.filter((item) => item !== nombre) : [...actuales, nombre])} alAgregar={agregarNuevaColeccion} /></div>
               <div><label className="mb-2 block text-sm text-gray-400">Precio (MXN)</label><input type="number" min="0" value={precio} onChange={(e) => setPrecio(e.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3" placeholder="Ej. 4500" /></div>
             </div>
             <label className="flex items-center gap-3 text-sm text-gray-300"><input type="checkbox" checked={disponible} onChange={(e) => setDisponible(e.target.checked)} className="h-4 w-4 accent-red-500" /> Disponible para venta</label>
@@ -755,6 +1018,7 @@ export default function AdminPage() {
                     alt={obra.titulo}
                     width={128}
                     height={160}
+                    unoptimized
                     className="w-full md:w-32 h-40 object-cover"
                   />
 
@@ -771,7 +1035,7 @@ export default function AdminPage() {
               <p className="text-gray-600 text-sm">
                 {obra.dimensiones} · {obra.anio}
               </p>
-                    <p className="mt-1 text-sm text-gray-400">{obra.categoria} · {obra.disponible ? "Disponible" : "Vendida"}{obra.precio ? ` · $${obra.precio} MXN` : ""}</p>
+                    <p className="mt-1 text-sm text-gray-400">{obra.colecciones.join(", ") || "Sin colección"} · {obra.disponible ? "Disponible" : "Vendida"}{obra.precio ? ` · $${obra.precio} MXN` : ""}</p>
 
                     <div className="flex gap-3 mt-5">
 
@@ -849,15 +1113,14 @@ export default function AdminPage() {
                   Técnica
                 </label>
 
-              <input
-                value={editTecnica}
-                onChange={(e) => setEditTecnica(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 px-4 py-3 outline-none focus:border-red-500"
-              />
+              <select value={editTecnica} onChange={(e) => setEditTecnica(e.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3 text-white">
+                {!tecnicasDisponibles.includes(editTecnica) && editTecnica && <option value={editTecnica}>{editTecnica}</option>}
+                {tecnicasDisponibles.map((opcion) => <option key={opcion} value={opcion}>{opcion}</option>)}
+              </select>
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
-              <div><label className="mb-2 block text-sm text-gray-400">Categoría</label><select value={editCategoria} onChange={(e) => setEditCategoria(e.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3 text-white">{["Pintura", "Grabado", "Ilustración", "Escultura"].map((item) => <option key={item}>{item}</option>)}</select></div>
+              <div className="sm:col-span-2"><label className="mb-2 block text-sm text-gray-400">Colecciones</label><SelectorColecciones opciones={Array.from(new Set([...catalogoColecciones, ...obras.flatMap((obra) => obra.colecciones), ...editColecciones]))} seleccionadas={editColecciones} nueva={nuevaColeccionEdicion} alCambiarNueva={setNuevaColeccionEdicion} alAlternar={(nombre) => setEditColecciones((actuales) => actuales.includes(nombre) ? actuales.filter((item) => item !== nombre) : [...actuales, nombre])} alAgregar={agregarColeccionEdicion} /></div>
               <div><label className="mb-2 block text-sm text-gray-400">Precio (MXN)</label><input type="number" min="0" value={editPrecio} onChange={(e) => setEditPrecio(e.target.value)} className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3" /></div>
             </div>
             <label className="flex items-center gap-3 text-sm text-gray-300"><input type="checkbox" checked={editDisponible} onChange={(e) => setEditDisponible(e.target.checked)} className="h-4 w-4 accent-red-500" /> Disponible para venta</label>
