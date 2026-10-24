@@ -13,9 +13,9 @@ Abre `http://localhost:3000`.
 
 ## Variables de entorno
 
-Copia `.env.example` a `.env.local`. Configura `OPENAI_API_KEY` solo si se usará el análisis de imágenes con IA, establece `ADMIN_FIREBASE_UID` con el UID de la cuenta administradora de Firebase y cambia `NEXT_PUBLIC_SITE_URL` por el dominio público al publicar. `NEXT_PUBLIC_ENABLE_AI_ANALYSIS` permanece en `false` hasta configurar la clave y el UID. Nunca añadas claves privadas al código ni al repositorio.
+Copia `.env.example` a `.env.local`. Configura `ADMIN_FIREBASE_UID` con el UID de la cuenta administradora de Firebase. Para las subidas firmadas, configura `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` y `CLOUDINARY_API_SECRET`. La clave secreta de Cloudinary y `OPENAI_API_KEY` solo deben existir en variables de entorno del servidor; nunca las incluyas en código cliente ni en Git.
 
-El análisis de imágenes requiere `OPENAI_API_KEY` y puede generar cargos de API. La ruta también exige una sesión válida de Firebase perteneciente al UID administrador.
+Para activar el análisis de imágenes, configura `OPENAI_API_KEY` y `OPENAI_VISION_MODEL`; después establece `NEXT_PUBLIC_ENABLE_AI_ANALYSIS=true`. El análisis puede generar cargos de API. Las rutas de análisis y firma exigen una sesión válida de Firebase perteneciente al UID administrador.
 
 ## Seguridad de Firebase
 
