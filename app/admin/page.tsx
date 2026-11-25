@@ -127,6 +127,7 @@ export default function AdminPage() {
 
   const [mensaje, setMensaje] = useState("");
   const [obras, setObras] = useState<Obra[]>([]);
+  const [busquedaObras, setBusquedaObras] = useState("");
   const [catalogoColecciones, setCatalogoColecciones] = useState<string[]>([]);
   const [eliminandoColeccion, setEliminandoColeccion] = useState("");
   const [cargandoObras, setCargandoObras] = useState(true);
@@ -994,6 +995,20 @@ export default function AdminPage() {
             Mis obras
           </h2>
 
+          <div className="mb-6">
+            <label htmlFor="busqueda-obras" className="mb-2 block text-xs tracking-[0.18em] text-gray-400">
+              BUSCAR OBRA PUBLICADA
+            </label>
+            <input
+              id="busqueda-obras"
+              type="search"
+              value={busquedaObras}
+              onChange={(event) => setBusquedaObras(event.target.value)}
+              placeholder="Buscar por título, técnica, año, colección..."
+              className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-red-500"
+            />
+          </div>
+
           {cargandoObras ? (
             <p className="text-gray-500">
               Cargando obras...
@@ -1006,7 +1021,22 @@ export default function AdminPage() {
 
             <div className="space-y-4">
 
-              {obras.map((obra) => (
+              {obras
+                .filter((obra) => {
+                  const texto = [
+                    obra.titulo,
+                    obra.tecnica,
+                    obra.dimensiones,
+                    obra.anio,
+                    obra.descripcion,
+                    obra.precio,
+                    ...obra.colecciones,
+                    obra.disponible ? "Disponible" : "Vendida",
+                  ].join(" ").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+                  const consulta = busquedaObras.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().trim();
+                  return !consulta || texto.includes(consulta);
+                })
+                .map((obra) => (
 
                 <div
                   key={obra.id}
@@ -1060,6 +1090,24 @@ export default function AdminPage() {
                 </div>
 
               ))}
+              {obras.filter((obra) => {
+                const texto = [
+                  obra.titulo,
+                  obra.tecnica,
+                  obra.dimensiones,
+                  obra.anio,
+                  obra.descripcion,
+                  obra.precio,
+                  ...obra.colecciones,
+                  obra.disponible ? "Disponible" : "Vendida",
+                ].join(" ").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+                const consulta = busquedaObras.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().trim();
+                return !consulta || texto.includes(consulta);
+              }).length === 0 && (
+                <p className="border border-zinc-800 px-4 py-8 text-center text-sm text-gray-500">
+                  No hay obras que coincidan con la búsqueda.
+                </p>
+              )}
 
             </div>
 

@@ -82,7 +82,6 @@ export default function Home() {
   const [aviso, setAviso] = useState("");
   const [perfil, setPerfil] = useState<PerfilArtista>({ nombre: "Yasiel Pérez Díaz", biografia: "Pintor, grabador, ilustrador y escultor. Un lenguaje visual que transita entre la materia, la memoria y la emoción.", whatsapp: "", redes: [] });
   const [fotoArtistaUrl, setFotoArtistaUrl] = useState("");
-  const inicioToque = useRef<number | null>(null);
 
   useEffect(() => {
     async function cargarObras() {
@@ -287,7 +286,7 @@ export default function Home() {
         <div className="flex min-h-[100svh] items-start justify-center p-4 sm:p-8 md:items-center" onClick={(event) => event.stopPropagation()}>
           <div className="my-auto w-full max-w-6xl animate-reveal">
             <div className="mb-3 flex justify-end"><button onClick={() => setObraSeleccionada(null)} aria-label="Cerrar" className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 text-3xl text-[#b9b0a5] transition-colors hover:border-white/30 hover:text-white">×</button></div>
-            <div className="grid items-center gap-7 md:grid-cols-2 md:gap-12" style={{ touchAction: "pan-y" }} onTouchStart={(event) => { inicioToque.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={(event) => { if (inicioToque.current !== null) { const delta = event.changedTouches[0].clientX - inicioToque.current; if (Math.abs(delta) > 48) cambiarObra(delta < 0 ? 1 : -1); } inicioToque.current = null; }}>
+            <div className="grid items-center gap-7 md:grid-cols-2 md:gap-12">
               <div className="relative h-[58vh] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#201d19] md:h-[78vh]"><Image src={obraSeleccionada.imagenUrl} alt={obraSeleccionada.titulo} fill sizes="(max-width: 768px) 100vw, 50vw" unoptimized className="object-contain" />{obras.length > 1 && <><button onClick={() => cambiarObra(-1)} aria-label="Obra anterior" className="absolute left-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">‹</button><button onClick={() => cambiarObra(1)} aria-label="Obra siguiente" className="absolute right-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">›</button></>}</div>
               <div className="pb-8">
                 <p className="eyebrow">{obraSeleccionada.colecciones.join(" · ")} · {obraSeleccionada.disponible ? "DISPONIBLE" : "VENDIDA"}</p>
