@@ -67,6 +67,7 @@ type Obra = {
   audioUrl: string;
   precio: string;
   disponible: boolean;
+  destacada: boolean;
   colecciones: string[];
   categoriaLegacy?: string;
   categoriasLegacy?: string[];
@@ -127,6 +128,7 @@ export default function AdminPage() {
 
   const [mensaje, setMensaje] = useState("");
   const [obras, setObras] = useState<Obra[]>([]);
+  const [busquedaObras, setBusquedaObras] = useState("");
   const [catalogoColecciones, setCatalogoColecciones] = useState<string[]>([]);
   const [eliminandoColeccion, setEliminandoColeccion] = useState("");
   const [cargandoObras, setCargandoObras] = useState(true);
@@ -148,6 +150,7 @@ export default function AdminPage() {
   const [artistaBio, setArtistaBio] = useState("");
   const [artistaWhatsApp, setArtistaWhatsApp] = useState("");
   const [fotoArtistaUrl, setFotoArtistaUrl] = useState("");
+  const [portadaObraId, setPortadaObraId] = useState("");
   const [fotoArtista, setFotoArtista] = useState<File | null>(null);
   const [vistaPreviaFoto, setVistaPreviaFoto] = useState("");
   const vistaPreviaFotoUrl = useRef("");
@@ -233,6 +236,7 @@ export default function AdminPage() {
           setArtistaBio(datos.biografia || "");
           setArtistaWhatsApp(datos.whatsapp || "");
           setFotoArtistaUrl(datos.fotoUrl || "");
+          setPortadaObraId(typeof datos.portadaObraId === "string" ? datos.portadaObraId : "");
           const redesGuardadas = datos.redes;
           setRedes(Array.isArray(redesGuardadas)
             ? (redesGuardadas.length ? redesGuardadas : [{ nombre: "Instagram", url: "" }])
@@ -258,6 +262,32 @@ export default function AdminPage() {
       console.error(error);
       setMensaje("No se pudo guardar la ficha del artista.");
     } finally { setGuardandoPerfil(false); }
+  }
+
+  async function establecerPortada(obra: Obra | null) {
+    try {
+      await setDoc(artistDoc, {
+        portadaUrl: obra?.imagenUrl || "",
+        portadaObraId: obra?.id || "",
+      }, { merge: true });
+      setPortadaObraId(obra?.id || "");
+      setMensaje(obra ? `“${obra.titulo}” ahora es la foto de portada.` : "Se quitó la foto de portada elegida.");
+    } catch (error) {
+      console.error(error);
+      setMensaje("No se pudo actualizar la foto de portada. Revisa los permisos de Firebase.");
+    }
+  }
+
+  async function alternarDestacada(obra: Obra) {
+    const destacada = !obra.destacada;
+    try {
+      await updateDoc(doc(db, "obras", obra.id), { destacada });
+      setObras((actuales) => actuales.map((item) => item.id === obra.id ? { ...item, destacada } : item));
+      setMensaje(destacada ? `“${obra.titulo}” aparecerá primero en la galería.` : `Se quitó “${obra.titulo}” de las destacadas.`);
+    } catch (error) {
+      console.error(error);
+      setMensaje("No se pudo actualizar la etiqueta de destacada. Revisa los permisos de Firebase.");
+    }
   }
 
   async function eliminarColeccion(nombre: string) {
@@ -392,6 +422,7 @@ export default function AdminPage() {
             audioUrl: datos.audioUrl || "",
             precio: datos.precio || "",
             disponible: datos.disponible ?? true,
+            destacada: datos.destacada === true,
             colecciones: obtenerColecciones(datos),
             categoriaLegacy: typeof datos.categoria === "string" ? datos.categoria : "",
             categoriasLegacy: Array.isArray(datos.categorias) ? datos.categorias.filter((valor): valor is string => typeof valor === "string") : [],
@@ -439,6 +470,10 @@ export default function AdminPage() {
     }
 
     try {
+      if (portadaObraId === id) {
+        await setDoc(artistDoc, { portadaUrl: "", portadaObraId: "" }, { merge: true });
+        setPortadaObraId("");
+      }
       await deleteDoc(doc(db, "obras", id));
 
       setObras((obrasActuales) =>
@@ -497,10 +532,14 @@ export default function AdminPage() {
         categorias: [],
         precio: editPrecio,
         disponible: editDisponible,
+        destacada: obraEditando.destacada,
       };
       if (editImagen) cambios.imagenUrl = await subirArchivo(editImagen, "image");
       if (editAudio) cambios.audioUrl = await subirArchivo(editAudio, "raw");
       await updateDoc(doc(db, "obras", obraEditando.id), cambios);
+      if (portadaObraId === obraEditando.id && typeof cambios.imagenUrl === "string") {
+        await setDoc(artistDoc, { portadaUrl: cambios.imagenUrl }, { merge: true });
+      }
 
       setObras((obrasActuales) =>
         obrasActuales.map((obra) =>
@@ -517,6 +556,7 @@ export default function AdminPage() {
                 categoriasLegacy: [],
                 precio: editPrecio,
                 disponible: editDisponible,
+                destacada: obraEditando.destacada,
                 imagenUrl: typeof cambios.imagenUrl === "string" ? cambios.imagenUrl : obra.imagenUrl,
                 audioUrl: typeof cambios.audioUrl === "string" ? cambios.audioUrl : obra.audioUrl,
               }
@@ -624,6 +664,7 @@ export default function AdminPage() {
         colecciones,
         precio,
         disponible,
+        destacada: false,
         imagenUrl,
         audioUrl,
         nombreImagen: imagen.name,
@@ -664,6 +705,7 @@ export default function AdminPage() {
           audioUrl: datos.audioUrl || "",
           precio: datos.precio || "",
           disponible: datos.disponible ?? true,
+          destacada: datos.destacada === true,
           colecciones: obtenerColecciones(datos),
           categoriaLegacy: typeof datos.categoria === "string" ? datos.categoria : "",
           categoriasLegacy: Array.isArray(datos.categorias) ? datos.categorias.filter((valor): valor is string => typeof valor === "string") : [],
@@ -827,6 +869,7 @@ export default function AdminPage() {
           <button type="button" onClick={() => setSeccionActiva("obras")} aria-current={seccionActiva === "obras" ? "page" : undefined} className={seccionActiva === "obras" ? "admin-action active" : "admin-action"}><span>03</span><strong>Mis obras</strong><small>Administrar la colección</small></button>
           <button type="button" onClick={() => setSeccionActiva("colecciones")} aria-current={seccionActiva === "colecciones" ? "page" : undefined} className={seccionActiva === "colecciones" ? "admin-action active" : "admin-action"}><span>04</span><strong>Colecciones</strong><small>Ver y eliminar colecciones</small></button>
         </nav>
+        {mensaje && <p role="status" className="mb-6 border border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-gray-300">{mensaje}</p>}
         {seccionActiva === "perfil" && (
           <section className="mb-12 border border-zinc-800 p-6 md:p-10">
           <p className="text-xs tracking-[0.25em] text-red-400">PERFIL PÚBLICO</p>
@@ -972,12 +1015,6 @@ export default function AdminPage() {
               {subiendo ? "SUBIENDO..." : "GUARDAR OBRA"}
             </button>
 
-            {mensaje && (
-              <p className="text-gray-400 text-sm">
-                {mensaje}
-              </p>
-            )}
-
           </div>
         </div>
 
@@ -994,6 +1031,29 @@ export default function AdminPage() {
             Mis obras
           </h2>
 
+          <div className="mb-6">
+            <label htmlFor="busqueda-obras" className="mb-2 block text-xs tracking-[0.18em] text-gray-400">
+              BUSCAR OBRA PUBLICADA
+            </label>
+            <input
+              id="busqueda-obras"
+              type="search"
+              value={busquedaObras}
+              onChange={(event) => setBusquedaObras(event.target.value)}
+              placeholder="Buscar por título, técnica, año, colección o etiqueta..."
+              className="w-full border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-red-500"
+            />
+            <p className="mt-2 text-xs text-gray-500">{obras.filter((obra) => {
+              const texto = [
+                obra.titulo, obra.tecnica, obra.dimensiones, obra.anio, obra.descripcion, obra.precio,
+                ...obra.colecciones, obra.disponible ? "Disponible" : "Vendida",
+                obra.destacada ? "Destacada" : "", portadaObraId === obra.id ? "Portada" : "",
+              ].join(" ").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+              const consulta = busquedaObras.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().trim();
+              return !consulta || texto.includes(consulta);
+            }).length} de {obras.length} obras</p>
+          </div>
+
           {cargandoObras ? (
             <p className="text-gray-500">
               Cargando obras...
@@ -1006,7 +1066,24 @@ export default function AdminPage() {
 
             <div className="space-y-4">
 
-              {obras.map((obra) => (
+              {obras
+                .filter((obra) => {
+                  const texto = [
+                    obra.titulo,
+                    obra.tecnica,
+                    obra.dimensiones,
+                    obra.anio,
+                    obra.descripcion,
+                    obra.precio,
+                    ...obra.colecciones,
+                    obra.disponible ? "Disponible" : "Vendida",
+                    obra.destacada ? "Destacada" : "",
+                    portadaObraId === obra.id ? "Portada" : "",
+                  ].join(" ").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+                  const consulta = busquedaObras.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().trim();
+                  return !consulta || texto.includes(consulta);
+                })
+                .map((obra) => (
 
                 <div
                   key={obra.id}
@@ -1037,7 +1114,26 @@ export default function AdminPage() {
               </p>
                     <p className="mt-1 text-sm text-gray-400">{obra.colecciones.join(", ") || "Sin colección"} · {obra.disponible ? "Disponible" : "Vendida"}{obra.precio ? ` · $${obra.precio} MXN` : ""}</p>
 
-                    <div className="flex gap-3 mt-5">
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => alternarDestacada(obra)}
+                        aria-pressed={obra.destacada}
+                        className={`border px-3 py-2 text-xs transition ${obra.destacada ? "border-red-500 bg-red-500/10 text-red-300" : "border-zinc-700 text-gray-400 hover:border-red-500 hover:text-white"}`}
+                      >
+                        {obra.destacada ? "★ DESTACADA · QUITAR" : "☆ MARCAR COMO DESTACADA"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => establecerPortada(obra)}
+                        disabled={portadaObraId === obra.id}
+                        className={`border px-3 py-2 text-xs transition disabled:cursor-default ${portadaObraId === obra.id ? "border-white bg-white text-black" : "border-zinc-700 text-gray-400 hover:border-white hover:text-white"}`}
+                      >
+                        {portadaObraId === obra.id ? "PORTADA ACTUAL" : "USAR COMO PORTADA"}
+                      </button>
+                    </div>
+
+                    <div className="flex gap-3 mt-4">
 
                       <button
                         onClick={() => comenzarEdicion(obra)}
@@ -1060,6 +1156,31 @@ export default function AdminPage() {
                 </div>
 
               ))}
+              {portadaObraId && (
+                <button type="button" onClick={() => establecerPortada(null)} className="border border-zinc-800 px-4 py-2 text-xs text-gray-400 hover:border-white hover:text-white">
+                  Quitar foto de portada elegida
+                </button>
+              )}
+              {obras.filter((obra) => {
+                const texto = [
+                  obra.titulo,
+                  obra.tecnica,
+                  obra.dimensiones,
+                  obra.anio,
+                  obra.descripcion,
+                  obra.precio,
+                  ...obra.colecciones,
+                  obra.disponible ? "Disponible" : "Vendida",
+                  obra.destacada ? "Destacada" : "",
+                  portadaObraId === obra.id ? "Portada" : "",
+                ].join(" ").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+                const consulta = busquedaObras.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().trim();
+                return !consulta || texto.includes(consulta);
+              }).length === 0 && (
+                <p className="border border-zinc-800 px-4 py-8 text-center text-sm text-gray-500">
+                  No hay obras que coincidan con la búsqueda.
+                </p>
+              )}
 
             </div>
 
