@@ -13,7 +13,7 @@ Abre `http://localhost:3000`.
 
 ## Gestión de la galería
 
-En **Admin → Mis obras** puedes buscar por datos de la obra y etiquetas, marcar o quitar la etiqueta **Destacada** para ordenar esas piezas primero en la galería, y elegir una obra como foto de portada. En el visor público, desliza horizontalmente sobre la imagen para pasar a la obra anterior o siguiente; también puedes usar las flechas en pantalla.
+En **Admin → Mis obras** puedes buscar por datos de la obra y etiquetas, marcar o quitar la etiqueta **Destacada** para ordenar esas piezas primero en la galería, y elegir una obra como foto de portada. En el visor público, usa los botones junto a la imagen o las flechas del teclado para pasar a la obra anterior o siguiente.
 
 ## Variables de entorno
 
