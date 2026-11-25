@@ -11,6 +11,10 @@ npm run dev
 
 Abre `http://localhost:3000`.
 
+## Gestión de la galería
+
+En **Admin → Mis obras** puedes buscar por datos de la obra y etiquetas, marcar o quitar la etiqueta **Destacada** para ordenar esas piezas primero en la galería, y elegir una obra como foto de portada. En el visor público, desliza horizontalmente sobre la imagen para pasar a la obra anterior o siguiente; también puedes usar las flechas en pantalla.
+
 ## Variables de entorno
 
 Copia `.env.example` a `.env.local`. Configura `ADMIN_FIREBASE_UID` con el UID de la cuenta administradora de Firebase. Para las subidas firmadas, configura `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` y `CLOUDINARY_API_SECRET`. La clave secreta de Cloudinary y `OPENAI_API_KEY` solo deben existir en variables de entorno del servidor; nunca las incluyas en código cliente ni en Git.

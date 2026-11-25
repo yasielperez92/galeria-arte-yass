@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { collection, doc, getDoc, getDocs, getFirestore } from "firebase/firestore";
 import app from "../firebase";
@@ -14,7 +14,7 @@ function leerColeccionesLocales(): string[] {
 type Obra = {
   id: string; titulo: string; tecnica: string; dimensiones: string; anio: string;
   descripcion: string; imagenUrl: string; audioUrl: string; colecciones: string[];
-  precio: string; disponible: boolean;
+  precio: string; disponible: boolean; destacada: boolean;
 };
 type PerfilArtista = { nombre: string; biografia: string; whatsapp: string; redes: { nombre: string; url: string }[] };
 
@@ -82,6 +82,7 @@ export default function Home() {
   const [aviso, setAviso] = useState("");
   const [perfil, setPerfil] = useState<PerfilArtista>({ nombre: "Yasiel Pérez Díaz", biografia: "Pintor, grabador, ilustrador y escultor. Un lenguaje visual que transita entre la materia, la memoria y la emoción.", whatsapp: "", redes: [] });
   const [fotoArtistaUrl, setFotoArtistaUrl] = useState("");
+  const [portadaUrl, setPortadaUrl] = useState("");
 
   useEffect(() => {
     async function cargarObras() {
@@ -94,6 +95,7 @@ export default function Home() {
             dimensiones: datos.dimensiones || "", anio: datos.anio || "", descripcion: datos.descripcion || "",
             imagenUrl: datos.imagenUrl || "", audioUrl: datos.audioUrl || "", colecciones: obtenerColecciones(datos),
             precio: datos.precio || "", disponible: datos.disponible ?? true,
+            destacada: datos.destacada === true,
           };
         });
         setObras(obrasCargadas);
@@ -125,6 +127,7 @@ export default function Home() {
             : Object.entries(redesGuardadas || {}).map(([nombre, url]) => ({ nombre, url: String(url) }));
           setPerfil({ nombre: datos.nombre || "Yasiel Pérez Díaz", biografia: datos.biografia || "", whatsapp: datos.whatsapp || "", redes });
           setFotoArtistaUrl(datos.fotoUrl || "");
+          setPortadaUrl(typeof datos.portadaUrl === "string" ? datos.portadaUrl : "");
         }
       } catch (error) {
         console.error("Error cargando la ficha del artista:", error);
@@ -158,7 +161,29 @@ export default function Home() {
     const coincideTecnica = tecnica === "Todas" || obra.tecnica.trim().localeCompare(tecnica.trim(), undefined, { sensitivity: "base" }) === 0;
     const coincideDisponibilidad = disponibilidad === "Todas" || (disponibilidad === "Disponibles" ? obra.disponible : !obra.disponible);
     return coincideColeccion && coincideTecnica && coincideDisponibilidad;
-  }), [coleccion, tecnica, disponibilidad, obras]);
+  }).sort((a, b) => Number(b.destacada) - Number(a.destacada)), [coleccion, tecnica, disponibilidad, obras]);
+
+  const cambiarObra = useCallback((paso: number) => {
+    if (!obraSeleccionada) return;
+    const candidatas = obrasFiltradas.some((obra) => obra.id === obraSeleccionada.id) ? obrasFiltradas : obras;
+    if (candidatas.length < 2) return;
+    const indice = candidatas.findIndex((obra) => obra.id === obraSeleccionada.id);
+    if (indice < 0) return;
+    const siguiente = candidatas[(indice + paso + candidatas.length) % candidatas.length];
+    setObraSeleccionada(siguiente);
+    window.history.replaceState(null, "", `#obra=${siguiente.id}`);
+  }, [obraSeleccionada, obrasFiltradas, obras]);
+
+  useEffect(() => {
+    if (!obraSeleccionada) return;
+    function navegarConTeclado(event: KeyboardEvent) {
+      if (event.key === "ArrowLeft") cambiarObra(-1);
+      if (event.key === "ArrowRight") cambiarObra(1);
+      if (event.key === "Escape") setObraSeleccionada(null);
+    }
+    document.addEventListener("keydown", navegarConTeclado);
+    return () => document.removeEventListener("keydown", navegarConTeclado);
+  }, [cambiarObra, obraSeleccionada]);
 
   function limpiarFiltros() {
     setColeccion("Todas");
@@ -203,14 +228,6 @@ export default function Home() {
     } catch { /* El usuario puede cerrar el diálogo de compartir. */ }
   }
 
-  function cambiarObra(paso: number) {
-    if (!obraSeleccionada || obras.length < 2) return;
-    const indice = obras.findIndex((obra) => obra.id === obraSeleccionada.id);
-    const siguiente = obras[(indice + paso + obras.length) % obras.length];
-    setObraSeleccionada(siguiente);
-    window.history.replaceState(null, "", `#obra=${siguiente.id}`);
-  }
-
   function enlaceWhatsApp(obra: Obra) {
     const mensaje = encodeURIComponent(`Hola, quisiera ${obra.disponible ? "consultar o comprar" : "consultar"} la obra “${obra.titulo}” de Yass.`);
     const numero = perfil.whatsapp.replace(/\D/g, "");
@@ -227,7 +244,7 @@ export default function Home() {
           <a href="/admin" className="admin-link">♙ <span>Admin</span></a>
         </div>
       </header>
-      <section id="inicio" className="hero-art flex min-h-[76svh] flex-col justify-center px-6 py-24 sm:px-10 md:min-h-[82svh] md:px-20">
+      <section id="inicio" className="hero-art flex min-h-[76svh] flex-col justify-center px-6 py-24 sm:px-10 md:min-h-[82svh] md:px-20" style={portadaUrl ? { backgroundImage: `url("${portadaUrl}")` } : undefined}>
         <div className="mx-auto w-full max-w-7xl">
           <div className="hero-copy"><p className="eyebrow">ESTUDIO DE ARTE</p>
           <h1 className="mt-3 text-7xl font-semibold tracking-[0.12em] sm:text-8xl md:text-[7.5rem]">YASS</h1>
@@ -263,6 +280,7 @@ export default function Home() {
                   <div className="relative aspect-[1.12/1] overflow-hidden bg-[#211e1a]">
                     {obra.imagenUrl && <Image src={obra.imagenUrl} alt={obra.titulo} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" loading="lazy" unoptimized className="object-cover transition duration-700 group-hover:scale-[1.035]" />}
                     <span className={`absolute right-4 top-4 rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.12em] ${obra.disponible ? "bg-[#e9e1d5] text-[#28231e]" : "bg-[#37332f] text-[#d2c8bb]"}`}>{obra.disponible ? "Disponible" : "Vendida"}</span>
+                    {obra.destacada && <span className="absolute left-4 top-4 rounded-full bg-[#f3262e] px-3 py-2 text-[10px] uppercase tracking-[0.12em] text-white">Destacada</span>}
                   </div>
                   <div className="flex items-start justify-between gap-2 pt-2">
                     <div><h3 className="text-sm font-medium sm:text-base">{obra.titulo}</h3><p className="mt-1 text-[10px] text-white/60 sm:text-xs">{obra.tecnica}{obra.dimensiones ? ` · ${obra.dimensiones}` : ""}{obra.anio ? ` · ${obra.anio}` : ""}</p></div>
@@ -287,7 +305,9 @@ export default function Home() {
           <div className="my-auto w-full max-w-6xl animate-reveal">
             <div className="mb-3 flex justify-end"><button onClick={() => setObraSeleccionada(null)} aria-label="Cerrar" className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 text-3xl text-[#b9b0a5] transition-colors hover:border-white/30 hover:text-white">×</button></div>
             <div className="grid items-center gap-7 md:grid-cols-2 md:gap-12">
-              <div className="relative h-[58vh] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#201d19] md:h-[78vh]"><Image src={obraSeleccionada.imagenUrl} alt={obraSeleccionada.titulo} fill sizes="(max-width: 768px) 100vw, 50vw" unoptimized className="object-contain" />{obras.length > 1 && <><button onClick={() => cambiarObra(-1)} aria-label="Obra anterior" className="absolute left-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">‹</button><button onClick={() => cambiarObra(1)} aria-label="Obra siguiente" className="absolute right-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">›</button></>}</div>
+              <div
+                className="relative h-[58vh] overflow-hidden rounded-2xl border border-white/[0.06] bg-[#201d19] md:h-[78vh]"
+              ><Image src={obraSeleccionada.imagenUrl} alt={obraSeleccionada.titulo} fill sizes="(max-width: 768px) 100vw, 50vw" unoptimized className="pointer-events-none object-contain" />{obras.length > 1 && <><button onClick={() => cambiarObra(-1)} aria-label="Obra anterior" className="absolute left-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">‹</button><button onClick={() => cambiarObra(1)} aria-label="Obra siguiente" className="absolute right-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-2xl text-white backdrop-blur transition-all hover:scale-105 hover:bg-[#bf775f]">›</button></>}</div>
               <div className="pb-8">
                 <p className="eyebrow">{obraSeleccionada.colecciones.join(" · ")} · {obraSeleccionada.disponible ? "DISPONIBLE" : "VENDIDA"}</p>
                 <h2 className="display-title mt-4 text-4xl font-light leading-tight sm:text-6xl">{obraSeleccionada.titulo}</h2>
